@@ -5,8 +5,7 @@
 ### Mojo & Python Version Mismatch
 **Issue:** Mojo (v0.25.7) may link against a system Python (e.g. 3.14) that differs from the `.pixi` environment Python (e.g. 3.13).
 **Symptom:** `Failed to initialize Smart Searcher: Python version mismatch`.
-**Fix:** Explicitly set `MOJO_PYTHON_LIBRARY` to the `.pixi` dylib before running the binary.
-**Solution:** Use the provided `hygrep.sh` wrapper script which handles this automatically.
+**Solution:** Always run the binary via `pixi run ./hygrep`. Pixi ensures the correct environment variables (`LD_LIBRARY_PATH` etc.) are set so Mojo finds the correct Python library.
 
 ## Architecture
 

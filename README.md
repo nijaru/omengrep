@@ -28,17 +28,17 @@ pixi run build
 
 ## Usage
 
-Use the wrapper script `hygrep.sh` to automatically handle environment setup:
+Run inside the Pixi environment:
 
 ```bash
-./hygrep.sh "login logic" ./src
+pixi run ./hygrep "login logic" ./src
 ```
 
 ### Agent Search (JSON)
 Get structured output for tool use.
 
 ```bash
-./hygrep.sh "login logic" ./src --json
+pixi run ./hygrep "login logic" ./src --json
 ```
 
 **Output:**
