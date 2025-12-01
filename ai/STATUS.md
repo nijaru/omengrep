@@ -1,13 +1,15 @@
 ## Current State
 | Metric | Value | Updated |
 |--------|-------|---------|
-| Phase | 1 (MojoGrep) | 2025-11-29 |
-| Build | Pending | - |
+| Phase | 3 (CLI Polish) | 2025-11-30 |
+| Build | Passing | 2025-11-30 |
 
 ## Active Work
-Initializing Phase 1: Scaffolding the "Hyper Scanner".
-- Setting up parallel directory walker.
-- Binding C regex library.
+Implementing professional CLI features.
+- `--help` menu.
+- `--version` flag.
+- `--limit` argument.
+- Robust error handling for model loading.
 
 ## Blockers
 - None.

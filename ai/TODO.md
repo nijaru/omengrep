@@ -1,3 +1,8 @@
 # Tasks
 **Status:** Managed via `bd` (Beads).
-Run `bd list` to view active tasks.
+
+## Phase 3: CLI Polish
+- [ ] Implement `--help` menu.
+- [ ] Implement `--version` flag.
+- [ ] Add `--limit <n>` argument.
+- [ ] Improve "Model Not Found" error message with download instructions.
