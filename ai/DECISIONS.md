@@ -7,16 +7,14 @@
 - **Performance:** Python is too slow for directory walking; Rust is difficult to ship with AI dependencies.
 - **Native AI:** MAX Engine allows running quantized models (INT8/FP16) efficiently on CPU/GPU.
 
-## 2. Core Architecture: "Hyper Hybrid" (No Vector DB)
+## 2. Core Architecture: "Hyper Hybrid"
 **Decision:** Two-Stage Pipeline: Recall (Keyword/Regex) -> Rerank (Cross-Encoder).
-**Alternatives Considered:**
-- **Vector DB:** Rejected (Heavy setup/indexing).
-- **Pure Grep:** Rejected (No semantic understanding).
 **Rationale:**
-- **Recall:** "Hyper Scanner" finds candidates.
-    - *Note:* Can be enhanced with **Query Expansion** (LLM generates synonyms) to catch "auth" when searching "login".
-- **Rerank:** "The Brain" scores them.
-- **UX:** Single entry point.
+- **Recall:** "Hyper Scanner" finds candidates efficiently using parallel regex matching.
+    - *Note:* Can be enhanced with **Query Expansion** (LLM generates synonyms) to improve recall coverage.
+- **Rerank:** "The Brain" scores candidates on-the-fly using a Cross-Encoder model.
+- **UX:** Single entry point; the tool manages the complexity.
+- **Simplicity:** Stateless design with no persistent index to maintain.
 
 ## 3. Interface (UX)
 **Decision:** Single "Magic" Command
@@ -31,4 +29,4 @@
 
 ## 5. Protocol
 **Decision:** MCP Native
-**Why:** Allows agents to use `hygrep` as a tool.
+**Why:** Allows AI agents to integrate `hygrep` as a structured tool for code exploration.

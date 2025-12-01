@@ -20,4 +20,4 @@
 - [ ] Implement fast BPE Tokenizer in Mojo
 - [ ] Add `--json` flag
 - [ ] Implement basic MCP Server loop (stdio)
-- [ ] **Milestone:** Connect `hygrep` to Claude Desktop (MCP).
+- [ ] **Milestone:** Connect `hygrep` to an MCP Client.
