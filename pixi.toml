@@ -17,4 +17,4 @@ onnxruntime = ">=1.16.0,<2"
 [tasks]
 build = "mojo build cli.mojo -o hygrep"
 run = "mojo cli.mojo"
-test = "mojo test tests"
+test = "mojo -I . tests/test_regex_smoke.mojo"

@@ -1,3 +1,3 @@
-{"id":"hgrep-63n","title":"Bind C regex library","description":"","status":"open","priority":2,"issue_type":"task","created_at":"2025-11-29T15:21:42.989827-08:00","updated_at":"2025-11-29T15:21:42.989827-08:00"}
+{"id":"hgrep-63n","title":"Bind C regex library","description":"","status":"closed","priority":2,"issue_type":"task","created_at":"2025-11-29T15:21:42.989827-08:00","updated_at":"2025-12-01T01:26:15.95507-08:00","closed_at":"2025-12-01T01:26:15.95507-08:00"}
 {"id":"hgrep-djw","title":"Scaffold Mojo project structure","description":"","status":"closed","priority":1,"issue_type":"task","created_at":"2025-11-29T15:21:32.759144-08:00","updated_at":"2025-11-29T17:24:23.613864-08:00","closed_at":"2025-11-29T17:24:23.613878-08:00"}
 {"id":"hgrep-hqm","title":"Implement parallel directory walker","description":"","status":"open","priority":2,"issue_type":"task","created_at":"2025-11-29T15:21:37.876341-08:00","updated_at":"2025-11-29T15:21:37.876341-08:00"}

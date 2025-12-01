@@ -10,7 +10,7 @@
 Optimization (Parallelism).
 
 ## Accomplished
-- **Refactor:** Renamed `src/brain` to `src/inference` for clarity.
-- **Stable Mojo:** Downgraded to v0.25.7.
+- **Stable Mojo:** Switched to v0.25.7 and updated `pixi.toml`.
 - **Native Regex:** Implemented `src/scanner/c_regex.mojo` using `libc` binding (Int-cast pattern).
-- **Integration:** Switched `walker.mojo` to use `c_regex`.
+- **Refactor:** Renamed `src/brain` to `src/inference`.
+- **Testing:** Configured `pixi run test` using `TestSuite` (v0.25.7 standard).

@@ -39,13 +39,14 @@ struct Regex:
         else:
             print("Regex compilation failed for: " + pattern)
 
-    fn __moveinit__(out self, owned existing: Self):
+    fn __moveinit__(out self, deinit existing: Self):
         self._preg = existing._preg
         self._pattern = existing._pattern
         self._initialized = existing._initialized
+        # Mark existing as uninitialized so its destructor doesn't free the pointer
         existing._initialized = False
 
-    fn __del__(owned self):
+    fn __del__(deinit self):
         if self._initialized:
             regfree(self._preg)
             # TODO: Free the _preg memory (128 bytes)
