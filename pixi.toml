@@ -3,11 +3,11 @@ name = "hgrep"
 version = "0.1.0"
 description = "Agent-Native search tool"
 authors = ["Your Name <you@example.com>"]
-channels = ["conda-forge", "https://conda.modular.com/max-nightly/", "pytorch"]
+channels = ["conda-forge", "https://conda.modular.com/max/", "pytorch"]
 platforms = ["osx-arm64", "linux-64"]
 
 [dependencies]
-max = "*"
+max = "25.7.*"
 python = ">=3.11,<3.14"
 huggingface_hub = ">=1.1.6,<2"
 numpy = ">=2.3.5,<3"
