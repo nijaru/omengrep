@@ -22,6 +22,7 @@ onnxruntime = ">=1.16.0,<2"
 [tasks]
 build = "mojo build cli.mojo -o hygrep"
 run = "mojo cli.mojo"
+test = "mojo -I . tests/test_regex_smoke.mojo"
 ```
 
 ## 2. MAX Engine Architecture
@@ -89,6 +90,31 @@ fn main():
     var p = alloc[UInt8](10)
     call_c_func(Int(p))
     p.free()
+```
+
+### Testing
+The `mojo test` command is **removed**. Use `TestSuite`.
+
+```mojo
+from testing import TestSuite, assert_true
+
+fn test_something():
+    assert_true(True)
+
+fn main():
+    TestSuite.discover_tests[__functions_in_module()]().run()
+```
+
+### Lifecycle Methods (New Syntax)
+Use `deinit` keyword instead of `owned` for `__del__` and `__moveinit__` arguments to avoid warnings.
+
+```mojo
+struct MyStruct:
+    fn __moveinit__(out self, deinit existing: Self):
+        pass
+
+    fn __del__(deinit self):
+        pass
 ```
 
 ## 5. Code Examples
