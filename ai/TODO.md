@@ -1,8 +1,7 @@
 # Tasks
 **Status:** Managed via `bd` (Beads).
 
-## Phase 3: CLI Polish
-- [ ] Implement `--help` menu.
-- [ ] Implement `--version` flag.
-- [ ] Add `--limit <n>` argument.
-- [ ] Improve "Model Not Found" error message with download instructions.
+## Phase 2: Optimization
+- [ ] Fix `libc` Regex Binding (Solve `UnsafePointer` errors).
+- [ ] Implement Parallel Directory Walker.
+- [ ] Verify performance gain vs Sequential/Python version.

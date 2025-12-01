@@ -1,32 +1,27 @@
 # Architectural Decisions
 
 ## 1. Language & Runtime
-**Decision:** Mojo + MAX Engine
+**Decision:** Mojo + ONNX Runtime
 **Why:**
-- **Single Binary:** Mojo compiles systems code (grep) and AI graph (rerank) into one static binary.
-- **Performance:** Python is too slow for directory walking; Rust is difficult to ship with AI dependencies.
-- **Native AI:** MAX Engine allows running quantized models (INT8/FP16) efficiently on CPU/GPU.
+- **Mojo:** Native performance for systems code (Scanner).
+- **ONNX Runtime:** Industry standard for inference. Using Python Interop for now (stability), targeting pure C-API binding later if needed.
 
 ## 2. Core Architecture: "Hyper Hybrid"
-**Decision:** Two-Stage Pipeline: Recall (Keyword/Regex) -> Rerank (Cross-Encoder).
+**Decision:** Two-Stage Pipeline: Recall (Keyword) -> Rerank (Semantic).
 **Rationale:**
-- **Recall:** "Hyper Scanner" finds candidates efficiently using parallel regex matching.
-    - *Note:* Can be enhanced with **Query Expansion** (LLM generates synonyms) to improve recall coverage.
-- **Rerank:** "The Brain" scores candidates on-the-fly using a Cross-Encoder model.
-- **UX:** Single entry point; the tool manages the complexity.
-- **Simplicity:** Stateless design with no persistent index to maintain.
+- **Recall:** Fast regex filtering finds candidates.
+- **Rerank:** Cross-encoder scores candidates.
+- **Benefit:** Zero indexing time. Always fresh.
 
-## 3. Interface (UX)
-**Decision:** Single "Magic" Command
-- **Command:** `hygrep "query"`
-- **Behavior:** The tool automatically performs Recall -> Rerank.
-- **Flags:** Optional flags for specific overrides.
+## 3. Model Selection
+**Decision:** `mixedbread-ai/mxbai-rerank-xsmall-v1`
+**Why:**
+- **Size:** ~40MB (Quantized).
+- **Speed:** Extremely low latency.
+- **Performance:** Competitive with larger models for code retrieval.
 
-## 4. Model Selection
-**Decision:** Tiered Strategy
-- **Default:** `mixedbread-ai/mxbai-rerank-xsmall-v1`.
-- **Format:** ONNX (Quantized).
-
-## 5. Output Format
-**Decision:** Standard CLI (Text) + Optional JSON
-**Why:** Primary user is a human developer. JSON is sufficient for agents to parse if needed.
+## 4. Optimization Strategy
+**Decision:** Parallelize IO, Native Regex
+**Why:** Python overhead is acceptable for the *Reranker* (run once on 50 items), but unacceptable for the *Scanner* (run on 50,000 items).
+- **Scanner:** Must be pure Mojo/C (Parallel).
+- **Reranker:** Python Interop is fine (Vectorized).
