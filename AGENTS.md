@@ -39,11 +39,11 @@
 ## Technology Stack
 
 -   **Language**: Mojo (Nightly/Stable)
--   **Inference**: MAX Engine (Mojo native)
--   **Regex**: `libc` / `pcre2` (FFI)
--   **CLI Parsing**: `arc` (Community Mojo arg parser)
--   **Models**: `Qwen3-Reranker-0.6B` (INT8/FP16 ONNX)
--   **Protocol**: Model Context Protocol (MCP)
+-   **Inference**: ONNX Runtime (via Python Interop)
+-   **Regex**: `libc` (FFI)
+-   **CLI Parsing**: Manual (Phase 3)
+-   **Models**: `mxbai-rerank-xsmall-v1` (INT8 ONNX)
+-   **Protocol**: Standard CLI / JSON
 
 ## Commands
 
@@ -57,9 +57,9 @@ pixi run build
 
 ## Development Phases
 
-1.  **MojoGrep**: Recreate `ripgrep` functionality (Scanner)
-2.  **The Brain**: Integrate MAX Engine + Reranker
-3.  **The Agent Interface**: JSON output, Tokenizer, MCP Server
+1.  **Hyper Scanner**: Recreate `ripgrep` functionality (Scanner) - **Done**
+2.  **The Brain**: Integrate ONNX Reranker - **Done**
+3.  **CLI Polish**: Professional CLI experience - **In Progress**
 
 See `ai/PLAN.md` for detailed roadmap.
 
