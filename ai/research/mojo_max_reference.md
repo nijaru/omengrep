@@ -22,7 +22,7 @@ onnxruntime = ">=1.16.0,<2"
 [tasks]
 build = "mojo build cli.mojo -o hygrep"
 run = "mojo cli.mojo"
-test = "mojo -I . tests/test_regex_smoke.mojo"
+test = "mojo -I . tests/test_regex_smoke.mojo && mojo -I . tests/test_walker.mojo"
 ```
 
 ## 2. MAX Engine Architecture
@@ -115,6 +115,34 @@ struct MyStruct:
 
     fn __del__(deinit self):
         pass
+```
+
+### Parallel Collection (The "Mask" Pattern)
+To collect variable-length results from a `parallelize` loop without race conditions or locks:
+1. Allocate a boolean mask (or index array) via `alloc`.
+2. Workers write to `mask[i]`.
+3. Main thread filters results sequentially after parallel loop.
+
+```mojo
+from algorithm import parallelize
+from memory import alloc
+
+fn parallel_filter(items: List[String]):
+    var mask = alloc[Bool](len(items))
+    
+    @parameter
+    fn worker(i: Int):
+        mask[i] = check(items[i])
+        
+    parallelize[worker](len(items))
+    
+    # Gather
+    var result = List[String]()
+    for i in range(len(items)):
+        if mask[i]:
+            result.append(items[i])
+            
+    mask.free()
 ```
 
 ## 5. Code Examples
