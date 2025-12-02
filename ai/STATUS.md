@@ -3,7 +3,7 @@
 | Metric | Value | Updated |
 |--------|-------|---------|
 | Phase | 7 (CLI Polish) | 2025-12-02 |
-| Version | 0.2.0-dev | 2025-12-02 |
+| Version | 0.0.2 | 2025-12-02 |
 | Perf | ~20k files/sec (Recall) | 2025-12-02 |
 | Inference | 2.5x faster (4 threads) | 2025-12-02 |
 | Mojo | v25.7 | 2025-12-01 |

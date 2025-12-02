@@ -25,7 +25,7 @@
 - [x] `--max-candidates` (cap inference work)
 - [x] Graph optimization level (ORT_ENABLE_ALL)
 
-## Current: Phase 7 - CLI Polish (v0.3.0)
+## Current: Phase 7 - CLI Polish (v0.0.3)
 
 **Goal:** Feature parity with modern CLI tools (ripgrep, fd, bat)
 
@@ -51,7 +51,7 @@
 | Config file | `~/.config/hygrep/config.toml` | hgrep-1dg |
 | Hidden files | `--hidden` flag | hgrep-0gz |
 
-## Phase 8: Distribution (v0.4.0)
+## Phase 8: Distribution (v0.0.4)
 
 **Goal:** Easy installation via PyPI
 
@@ -60,7 +60,7 @@
 | GitHub Actions | Build wheels (macOS-arm64, linux-x64) | hgrep-4n4 |
 | PyPI publish | `pip install hygrep` | hgrep-4n4 |
 
-## Phase 9: Hardware Acceleration (v0.5.0+)
+## Phase 9: Hardware Acceleration (v0.0.5+)
 
 **Goal:** Leverage GPU/NPU for inference
 
