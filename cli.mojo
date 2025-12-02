@@ -4,32 +4,63 @@ from pathlib import Path
 from python import Python, PythonObject
 import sys
 
+fn print_help():
+    print("hygrep - Hybrid search CLI: grep speed + LLM intelligence")
+    print("")
+    print("Usage: hygrep <query> [path] [--json]")
+    print("")
+    print("Arguments:")
+    print("  query     Search query (natural language or regex)")
+    print("  path      Directory to search (default: current directory)")
+    print("")
+    print("Options:")
+    print("  --json    Output structured JSON for agents")
+    print("  --help    Show this help message")
+
 fn main() raises:
     var args = sys.argv()
-    
+
     var query = ""
     var path_str = "."
     var json_mode = False
-    
+
     # Simple manual arg parsing
     # skips args[0] (program name)
     for i in range(1, len(args)):
         var arg = args[i]
-        if arg == "--json":
+        if arg == "--help" or arg == "-h":
+            print_help()
+            return
+        elif arg == "--json":
             json_mode = True
         elif query == "":
             query = arg
-        elif path_str == ".": 
+        elif path_str == ".":
             path_str = arg
-            
+
     if query == "":
         if json_mode:
-             print("[]")
+            print("[]")
         else:
-             print("Usage: hygrep <query> [path] [--json]")
+            print_help()
         return
 
     var root = Path(path_str)
+
+    # Validate path exists
+    if not root.exists():
+        if json_mode:
+            print('{"error": "Path does not exist: ' + path_str + '"}')
+        else:
+            print("Error: Path does not exist: " + path_str)
+        return
+
+    if not root.is_dir():
+        if json_mode:
+            print('{"error": "Path is not a directory: ' + path_str + '"}')
+        else:
+            print("Error: Path is not a directory: " + path_str)
+        return
     
     if not json_mode:
         print("HyperGrep: Searching for '" + query + "' in " + path_str)

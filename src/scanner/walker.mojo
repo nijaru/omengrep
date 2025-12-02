@@ -39,12 +39,16 @@ fn is_binary_ext(name: String) -> Bool:
     if name.endswith(".lock"): return True
     return False
 
+alias MAX_FILE_SIZE = 1_000_000  # 1MB limit
+
 fn scan_file(file: Path, re: Regex) -> Bool:
     try:
+        # Skip files larger than 1MB to avoid OOM
+        var stat = file.stat()
+        if stat.st_size > MAX_FILE_SIZE:
+            return False
+
         with open(file, "r") as f:
-            # Read only first 1MB to avoid OOM on accidental huge files
-            # Mojo f.read() reads all.
-            # If we can't limit, we trust the extension check.
             var content = f.read()
             return re.matches(content)
     except:
@@ -96,7 +100,11 @@ fn hyper_scan(root: Path, pattern: String) raises -> List[Path]:
     # 2. Parallel Scan
     var re = Regex(pattern)
     var mask = alloc[Bool](num_files)
-    
+
+    # Initialize mask to False (avoid undefined behavior)
+    for i in range(num_files):
+        mask[i] = False
+
     @parameter
     fn worker(i: Int):
         if scan_file(all_files[i], re):

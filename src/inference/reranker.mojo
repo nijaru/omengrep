@@ -17,19 +17,14 @@ struct Reranker:
             # Ensure current directory is in python path so we can import src.inference.bridge
             var current_dir = String(os.getcwd())
             sys.path.append(current_dir)
-            
-            # Add pixi site-packages
-            var py_versions = List[String]()
-            py_versions.append("3.13")
-            py_versions.append("3.12")
-            py_versions.append("3.11")
-            
-            for i in range(len(py_versions)):
-                var v = py_versions[i]
-                var site = current_dir + "/.pixi/envs/default/lib/python" + v + "/site-packages"
-                if os.path.exists(site):
-                    sys.path.append(site)
-                    break
+
+            # Add pixi site-packages (detect Python version dynamically)
+            var major = String(sys.version_info.major)
+            var minor = String(sys.version_info.minor)
+            var py_version = major + "." + minor
+            var site = current_dir + "/.pixi/envs/default/lib/python" + py_version + "/site-packages"
+            if os.path.exists(site):
+                sys.path.append(site)
             
             self._bridge = Python.import_module("src.inference.bridge")
             
