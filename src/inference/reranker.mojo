@@ -2,6 +2,7 @@ from python import Python, PythonObject
 from collections import List
 from pathlib import Path
 from sys import stderr
+from src.scanner.walker import ScanMatch
 
 struct Reranker:
     var _bridge: PythonObject
@@ -37,25 +38,28 @@ struct Reranker:
         except e:
             print("Failed to initialize Smart Searcher: " + String(e), file=stderr)
 
-    fn search_raw(self, query: String, files: List[Path], top_k: Int = 10) raises -> String:
+    fn search_raw(self, query: String, matches: List[ScanMatch], top_k: Int = 10) raises -> String:
         """
         Returns the raw JSON string result from the bridge.
+        Passes file content to avoid double-reads.
         """
         if not self._initialized:
             return "[]"
 
-        var py_files = Python.evaluate("[]")
-        for i in range(len(files)):
-            _ = py_files.append(String(files[i]))
+        # Build dict {path: content} to pass to Python
+        var py_contents = Python.evaluate("{}")
+        for i in range(len(matches)):
+            var path_str = String(matches[i].path)
+            py_contents[path_str] = matches[i].content
 
-        var json_str = self._bridge.run_search(query, py_files, top_k)
+        var json_str = self._bridge.run_search(query, py_contents, top_k)
         return String(json_str)
 
-    fn search(self, query: String, files: List[Path], top_k: Int = 10) raises -> PythonObject:
+    fn search(self, query: String, matches: List[ScanMatch], top_k: Int = 10) raises -> PythonObject:
         """
         Executes the smart search pipeline via Python bridge.
         Returns a Python List of Dicts.
         """
-        var json_str = self.search_raw(query, files, top_k)
+        var json_str = self.search_raw(query, matches, top_k)
         var json = Python.import_module("json")
         return json.loads(json_str)

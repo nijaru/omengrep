@@ -1,4 +1,4 @@
-from src.scanner.walker import hyper_scan
+from src.scanner.walker import hyper_scan, ScanMatch
 from src.inference.reranker import Reranker
 from pathlib import Path
 from python import Python, PythonObject

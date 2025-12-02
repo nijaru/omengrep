@@ -3,6 +3,7 @@ import json
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
+from concurrent.futures import ThreadPoolExecutor
 from src.inference.context import ContextExtractor
 
 class SmartSearcher:
@@ -25,33 +26,35 @@ class SmartSearcher:
             print(f"Error loading model: {e}")
             raise e
 
-    def search(self, query: str, file_paths: list[str], top_k: int = 10) -> str:
+    def search(self, query: str, file_contents: dict[str, str], top_k: int = 10) -> str:
         """
-        Full pipeline: Read -> Extract -> Rerank.
+        Full pipeline: Extract -> Rerank.
+        Accepts pre-read file contents to avoid double-reads.
         Returns a JSON string of results.
         """
         candidates = []
-        
-        # 1. Extraction Phase
-        for path in file_paths:
-            if not os.path.exists(path):
-                continue
-                
-            # Extract blocks
-            blocks = self.extractor.extract(path, query)
-            
-            for block in blocks:
-                # We score the content of the block
-                # Format: "name: content" or just content
+
+        # 1. Extraction Phase - parallel tree-sitter parsing
+        def extract_file(item: tuple[str, str]) -> list[dict]:
+            path, content = item
+            return [(path, block) for block in self.extractor.extract(path, query, content=content)]
+
+        # Use ThreadPoolExecutor for parallel extraction
+        items = list(file_contents.items())
+        with ThreadPoolExecutor(max_workers=min(4, len(items))) as executor:
+            all_blocks = list(executor.map(extract_file, items))
+
+        # Flatten results and build candidates
+        for file_blocks in all_blocks:
+            for path, block in file_blocks:
                 text_to_score = f"{block['type']} {block['name']}: {block['content']}"
-                
                 candidates.append({
                     "file": path,
                     "type": block['type'],
                     "name": block['name'],
                     "start_line": block['start_line'],
-                    "content": block['content'], # Keep original for display
-                    "score_text": text_to_score # Text for model
+                    "content": block['content'],
+                    "score_text": text_to_score
                 })
 
         if not candidates:
@@ -134,7 +137,7 @@ def init_searcher(model_path: str, tokenizer_path: str):
     global _searcher
     _searcher = SmartSearcher(model_path, tokenizer_path)
 
-def run_search(query: str, file_paths: list[str], top_k: int = 10) -> str:
+def run_search(query: str, file_contents: dict[str, str], top_k: int = 10) -> str:
     if _searcher is None:
         return json.dumps({"error": "Searcher not initialized"})
-    return _searcher.search(query, file_paths, top_k)
+    return _searcher.search(query, file_contents, top_k)

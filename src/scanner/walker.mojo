@@ -1,10 +1,28 @@
 from pathlib import Path
-from collections import List, Set
+from collections import List, Set, Dict
 from algorithm import parallelize
 from memory import UnsafePointer, alloc
 from os.path import realpath
 from sys import stderr
 from src.scanner.c_regex import Regex
+
+
+@fieldwise_init
+struct ScanMatch(Stringable, Copyable, Movable):
+    """A file that matched the search pattern, with its content."""
+    var path: Path
+    var content: String
+
+    fn __str__(self) -> String:
+        return String(self.path)
+
+    fn __copyinit__(out self, existing: Self):
+        self.path = existing.path
+        self.content = existing.content
+
+    fn __moveinit__(out self, deinit existing: Self):
+        self.path = existing.path^
+        self.content = existing.content^
 
 fn is_ignored_dir(name: String) -> Bool:
     if name == "node_modules": return True
@@ -43,21 +61,24 @@ fn is_binary_ext(name: String) -> Bool:
 
 alias MAX_FILE_SIZE = 1_000_000  # 1MB limit
 
-fn scan_file(file: Path, re: Regex) -> Bool:
+
+fn scan_file_with_content(file: Path, re: Regex) -> String:
+    """Returns file content if matches, empty string if not."""
     try:
-        # Skip files larger than 1MB to avoid OOM
         var stat = file.stat()
         if stat.st_size > MAX_FILE_SIZE:
-            return False
+            return ""
 
         with open(file, "r") as f:
             var content = f.read()
-            return re.matches(content)
+            if re.matches(content):
+                return content
+            return ""
     except:
-        return False
+        return ""
 
-fn hyper_scan(root: Path, pattern: String) raises -> List[Path]:
-    var candidates = List[Path]()
+fn hyper_scan(root: Path, pattern: String) raises -> List[ScanMatch]:
+    var candidates = List[ScanMatch]()
     var all_files = List[Path]()
     var visited = Set[String]()  # Track visited dirs to avoid symlink loops
 
@@ -109,28 +130,32 @@ fn hyper_scan(root: Path, pattern: String) raises -> List[Path]:
     if num_files == 0:
         return candidates^
 
-    # 2. Parallel Scan
+    # 2. Parallel Scan - store content for matching files
     var re = Regex(pattern)
     var mask = alloc[Bool](num_files)
 
-    # Initialize mask to False (avoid undefined behavior)
+    # Pre-allocate content storage (empty strings)
+    var contents = List[String](capacity=num_files)
     for i in range(num_files):
         mask[i] = False
+        contents.append("")
 
     @parameter
     fn worker(i: Int):
-        if scan_file(all_files[i], re):
+        var result = scan_file_with_content(all_files[i], re)
+        if len(result) > 0:
             mask[i] = True
+            contents[i] = result
         else:
             mask[i] = False
 
     parallelize[worker](num_files)
-    
-    # 3. Gather results
+
+    # 3. Gather results with content
     for i in range(num_files):
         if mask[i]:
-            candidates.append(all_files[i])
-            
+            candidates.append(ScanMatch(all_files[i], contents[i]))
+
     mask.free()
-            
+
     return candidates^
