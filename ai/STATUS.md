@@ -9,7 +9,7 @@
 
 ## Active Work
 
-Distribution architecture decided. Ready for implementation.
+Distribution architecture implemented. Ready for CI/CD and PyPI.
 
 ## Completed (This Session)
 
@@ -17,8 +17,11 @@ Distribution architecture decided. Ready for implementation.
 - P3: Parallel context extraction (ThreadPoolExecutor for tree-sitter parsing)
 - Renamed repo: hypergrep → hygrep (CLI, package, repo aligned)
 - **Discovery:** Mojo `PythonModuleBuilder` enables native Python extensions
-  - No subprocess overhead, direct import
-  - Enables `pip install hygrep` distribution
+- **Implemented:** New distribution architecture:
+  - `src/scanner/_scanner.mojo` - Mojo Python extension module
+  - `src/hygrep/` - Python package (cli.py, reranker.py, extractor.py)
+  - `pyproject.toml` - hatchling wheel packaging
+  - Updated `pixi.toml` with build-ext, hygrep tasks
 
 ## Blockers
 
@@ -30,9 +33,7 @@ None.
 
 ## Next Steps
 
-1. Refactor scanner as Mojo Python extension (`_scanner.so`)
-2. Create Python CLI entry point
-3. Set up GitHub Actions for wheel building
-4. Publish to PyPI
+1. Set up GitHub Actions for wheel building (macOS-arm64, linux-x64)
+2. Publish to PyPI as `hygrep`
 
 See `bd list --status=open` for open issues.
