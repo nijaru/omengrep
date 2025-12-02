@@ -5,19 +5,39 @@ from python import Python, PythonObject
 from sys import stderr
 import sys
 
+alias VERSION = "0.1.0"
+
+fn print_version():
+    print("hygrep " + VERSION)
+
 fn print_help():
-    print("hygrep - Hybrid search CLI: grep speed + LLM intelligence")
+    print("hygrep " + VERSION + " - Hybrid search: grep speed + LLM intelligence")
     print("")
     print("Usage: hygrep <query> [path] [options]")
     print("")
     print("Arguments:")
     print("  query       Search query (natural language or regex)")
-    print("  path        Directory to search (default: current directory)")
+    print("  path        Directory to search (default: .)")
     print("")
     print("Options:")
-    print("  -n N        Number of results to return (default: 10)")
-    print("  --json      Output structured JSON for agents")
-    print("  --help      Show this help message")
+    print("  -n N        Number of results (default: 10)")
+    print("  --json      Output JSON for agents")
+    print("  -q, --quiet Suppress progress messages")
+    print("  -h, --help  Show this help")
+    print("  -v, --version  Show version")
+
+fn is_regex_pattern(query: String) -> Bool:
+    """Check if query contains regex metacharacters."""
+    if "*" in query: return True
+    if "(" in query: return True
+    if "[" in query: return True
+    if "\\" in query: return True
+    if "|" in query: return True
+    if "+" in query: return True
+    if "?" in query: return True
+    if "^" in query: return True
+    if "$" in query: return True
+    return False
 
 fn main() raises:
     var args = sys.argv()
@@ -25,25 +45,30 @@ fn main() raises:
     var query = ""
     var path_str = "."
     var json_mode = False
+    var quiet_mode = False
     var top_k = 10
     var expect_n = False
 
-    # Simple manual arg parsing
-    # skips args[0] (program name)
+    # Arg parsing
     for i in range(1, len(args)):
         var arg = args[i]
         if expect_n:
             top_k = Int(atol(arg))
             expect_n = False
-        elif arg == "--help" or arg == "-h":
+        elif arg == "-h" or arg == "--help":
             print_help()
+            return
+        elif arg == "-v" or arg == "--version":
+            print_version()
             return
         elif arg == "--json":
             json_mode = True
+        elif arg == "-q" or arg == "--quiet":
+            quiet_mode = True
         elif arg == "-n":
             expect_n = True
-        elif arg.startswith("-n="):
-            top_k = Int(atol(arg[3:]))
+        elif arg.startswith("-n"):
+            top_k = Int(atol(arg[2:]))
         elif query == "":
             query = arg
         elif path_str == ".":
@@ -58,7 +83,7 @@ fn main() raises:
 
     var root = Path(path_str)
 
-    # Validate path exists
+    # Validate path
     if not root.exists():
         if json_mode:
             print('{"error": "Path does not exist: ' + path_str + '"}')
@@ -72,60 +97,45 @@ fn main() raises:
         else:
             print("Error: Path is not a directory: " + path_str, file=stderr)
         return
-    
-    if not json_mode:
-        print("HyperGrep: Searching for '" + query + "' in " + path_str)
-    
-    # --- Recall Strategy ---
-    # Transform natural language query into high-recall regex
+
+    if not json_mode and not quiet_mode:
+        print("Searching for '" + query + "' in " + path_str, file=stderr)
+
+    # Query expansion: "login auth" -> "login|auth" for better recall
     var scanner_query = query
-    
-    # Use Python for string manipulation safety
-    var py_query = PythonObject(query)
-    
-    # Heuristic: If query has spaces but no obvious regex chars, treat as OR
-    if " " in query:
-        var is_regex = False
-        if "*" in query: is_regex = True
-        if "(" in query: is_regex = True
-        if "[" in query: is_regex = True
-        if "\\" in query: is_regex = True
-        if "|" in query: is_regex = True
-        
-        if not is_regex:
-            scanner_query = String(py_query.replace(" ", "|"))
-    
-    # 1. Recall (Scanner)
+    if " " in query and not is_regex_pattern(query):
+        var py_query = PythonObject(query)
+        scanner_query = String(py_query.replace(" ", "|"))
+
+    # 1. Recall
     var matches = hyper_scan(root, scanner_query)
-    
-    if not json_mode:
-        print("Recall: Found " + String(len(matches)) + " candidates.")
-    
+
+    if not json_mode and not quiet_mode:
+        print("Found " + String(len(matches)) + " candidates", file=stderr)
+
     if len(matches) == 0:
         if json_mode:
             print("[]")
         return
 
-    # 2. Smart Search
-    if not json_mode:
-        print("Analyzing context & reranking...")
-        
+    # 2. Rerank
+    if not json_mode and not quiet_mode:
+        print("Reranking...", file=stderr)
+
     var brain = Reranker()
-    
+
     if json_mode:
-        var json_res = brain.search_raw(query, matches, top_k)
-        print(json_res)
+        print(brain.search_raw(query, matches, top_k))
         return
 
     var results = brain.search(query, matches, top_k)
     var num_results = Int(len(results))
-    
+
     if num_results == 0:
-        print("No relevant context found after reranking.")
+        print("No relevant results.", file=stderr)
         return
-    
-    print("\n--- Top Results ---")
-    
+
+    # Output results
     for i in range(num_results):
         var item = results[i]
         var file = String(item["file"])
@@ -133,8 +143,5 @@ fn main() raises:
         var score = Float64(item["score"])
         var kind = String(item["type"])
         var start_line = String(item["start_line"])
-        
-        print("------------------------------------------------")
-        print(file + ":" + start_line)
-        print("Symbol: " + kind + " " + name)
-        print("Score:  " + String(score))
+
+        print(file + ":" + start_line + " [" + kind + "] " + name + " (" + String(score) + ")")
