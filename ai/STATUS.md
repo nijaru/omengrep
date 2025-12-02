@@ -2,7 +2,7 @@
 
 | Metric | Value | Updated |
 |--------|-------|---------|
-| Phase | 6 (Performance) | 2025-12-02 |
+| Phase | 7 (CLI Polish) | 2025-12-02 |
 | Version | 0.2.0-dev | 2025-12-02 |
 | Perf | ~20k files/sec (Recall) | 2025-12-02 |
 | Inference | 2.5x faster (4 threads) | 2025-12-02 |
@@ -10,21 +10,26 @@
 
 ## Active Work
 
-Phase 6 performance optimizations implemented.
+Phase 7 CLI polish - making hygrep feel like a modern CLI tool.
 
-## Completed (This Session)
+Priority features:
+1. Color output (hgrep-zxs)
+2. Gitignore support (hgrep-qof)
+3. Exit codes (hgrep-bu6)
+4. Context lines (hgrep-rj4)
 
-### Phase 6: Performance & Polish
-- **Thread optimization:** 4-thread ONNX inference (2.5x speedup)
-- **`--fast` mode:** Skip neural reranking for instant grep (10x faster)
-- **`-t/--type` filter:** Filter by file type (py, js, ts, etc.)
-- **`--max-candidates`:** Cap inference work (default 100)
-- **Graph optimization:** ORT_ENABLE_ALL for model
+## Completed (Recent)
 
-### Previous
-- Distribution architecture (Mojo Python extension)
+### Phase 6: Performance (Complete)
+- Thread optimization: 4-thread ONNX inference (2.5x speedup)
+- `--fast` mode: Skip neural reranking (10x faster)
+- `-t/--type` filter: Filter by file type
+- `--max-candidates`: Cap inference work (default 100)
+- Graph optimization: ORT_ENABLE_ALL
+
+### Phase 5: Distribution (Complete)
+- Mojo Python extension module
 - Platform-specific wheel tags
-- UTF-8 binary file handling
 - Removed legacy Mojo CLI
 
 ## Blockers
@@ -37,7 +42,8 @@ None.
 
 ## Next Steps
 
-1. Set up GitHub Actions for wheel building (macOS-arm64, linux-x64)
-2. Publish to PyPI as `hygrep`
+1. Implement color output for better UX
+2. Add gitignore support for filtering
+3. Proper exit codes for scripting
 
-See `bd list --status=open` for open issues.
+See `bd list --status=open` for all open issues.

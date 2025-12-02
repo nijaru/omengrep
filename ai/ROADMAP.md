@@ -18,46 +18,49 @@
 - [x] Platform-specific wheel tags
 - [x] Removed legacy Mojo CLI
 
-## Current: Phase 6 - Performance & Polish (v0.2.0)
+### Phase 6: Performance (Completed)
+- [x] Thread optimization (4 threads, 2.5x speedup)
+- [x] `--fast` mode (skip reranking, 10x faster)
+- [x] `-t/--type` filter (file type filtering)
+- [x] `--max-candidates` (cap inference work)
+- [x] Graph optimization level (ORT_ENABLE_ALL)
 
-**Goal:** 2-3x faster inference, better CLI UX
+## Current: Phase 7 - CLI Polish (v0.3.0)
 
-### Performance (P0)
-| Task | Impact | Status |
-|------|--------|--------|
-| Thread optimization (4 threads) | 2.5x inference speedup | TODO |
-| Candidate limit (--max-candidates) | Cap work before rerank | TODO |
-| Graph optimization level | Minor speedup | TODO |
+**Goal:** Feature parity with modern CLI tools (ripgrep, fd, bat)
 
-**Benchmarks (21 candidates, CPU):**
-```
-Threads=1: 5537ms
-Threads=2: 3490ms (1.6x)
-Threads=4: 2260ms (2.5x) ← optimal
-Threads=8: 2146ms (diminishing)
-```
+### P2: Essential Polish
+| Feature | Description | Beads |
+|---------|-------------|-------|
+| Color output | Colored paths, types, scores | hgrep-zxs |
+| Gitignore support | Parse .gitignore files | hgrep-qof |
+| Exit codes | 0=match, 1=none, 2=error | hgrep-bu6 |
+| Context lines | `-C/-A/-B` surrounding code | hgrep-rj4 |
 
-### CLI Features (P1)
-| Task | Use Case | Status |
-|------|----------|--------|
-| `--fast` mode | Skip reranking, pure grep | TODO |
-| `-t/--type` filter | Limit to file types | TODO |
-| `--min-score` threshold | Filter low-confidence | TODO |
-| Better progress output | Show file count, timing | TODO |
+### P3: Quality of Life
+| Feature | Description | Beads |
+|---------|-------------|-------|
+| Stats flag | `--stats` timing breakdown | hgrep-5jf |
+| Min score | `--min-score` threshold | hgrep-97l |
+| Shell completions | bash, zsh, fish | hgrep-04d |
+| Exclude patterns | `--exclude`, `--glob` | hgrep-3r9 |
 
-## Phase 7: Features (v0.3.0)
+### P4: Nice to Have
+| Feature | Description | Beads |
+|---------|-------------|-------|
+| Config file | `~/.config/hygrep/config.toml` | hgrep-1dg |
+| Hidden files | `--hidden` flag | hgrep-0gz |
 
-**Goal:** Feature parity with modern search tools
+## Phase 8: Distribution (v0.4.0)
 
-| Feature | Description |
-|---------|-------------|
-| Gitignore support | Parse .gitignore files |
-| Context lines `-C N` | Show surrounding code |
-| `--stats` flag | Show timing breakdown |
-| Config file `.hygreprc` | Persistent options |
-| JSONL streaming | Process results incrementally |
+**Goal:** Easy installation via PyPI
 
-## Phase 8: Hardware Acceleration (v0.4.0+)
+| Task | Description | Beads |
+|------|-------------|-------|
+| GitHub Actions | Build wheels (macOS-arm64, linux-x64) | hgrep-4n4 |
+| PyPI publish | `pip install hygrep` | hgrep-4n4 |
+
+## Phase 9: Hardware Acceleration (v0.5.0+)
 
 **Goal:** Leverage GPU/NPU for inference
 
@@ -77,8 +80,6 @@ Threads=8: 2146ms (diminishing)
 | mxbai-rerank-xsmall-v1 | Good | Fast | 40MB | **Current** |
 | mxbai-rerank-base-v2 | Better | 2x slower | 110MB |
 | jina-reranker-v1-tiny-en | OK | Fastest | 33MB |
-
-**Decision:** Keep xsmall-v1 default, add `--model` flag later.
 
 ## Non-Goals
 
