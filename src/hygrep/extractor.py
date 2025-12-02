@@ -6,6 +6,7 @@ import tree_sitter_javascript
 import tree_sitter_typescript
 import tree_sitter_rust
 import tree_sitter_go
+import tree_sitter_mojo
 from tree_sitter import Language, Parser, Node, QueryCursor
 
 # Map extensions to language capsules
@@ -17,6 +18,8 @@ LANGUAGE_CAPSULES = {
     ".tsx": tree_sitter_typescript.language_tsx(),
     ".rs": tree_sitter_rust.language(),
     ".go": tree_sitter_go.language(),
+    ".mojo": tree_sitter_mojo.language(),
+    ".🔥": tree_sitter_mojo.language(),  # Mojo's emoji extension
 }
 
 QUERIES = {
@@ -44,7 +47,11 @@ QUERIES = {
         (function_declaration) @function
         (method_declaration) @function
         (type_declaration) @class
-    """.strip()
+    """.strip(),
+    "mojo": """
+        (function_definition) @function
+        (class_definition) @class
+    """,
 }
 
 class ContextExtractor:
@@ -76,6 +83,7 @@ class ContextExtractor:
         if ext in [".ts", ".tsx"]: return "typescript"
         if ext == ".rs": return "rust"
         if ext == ".go": return "go"
+        if ext in [".mojo", ".🔥"]: return "mojo"
         return None
 
     def get_language_for_file(self, path: str) -> Optional[Any]:

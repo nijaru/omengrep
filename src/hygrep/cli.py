@@ -95,7 +95,7 @@ _hygrep() {
 
     case "${prev}" in
         -t|--type)
-            COMPREPLY=( $(compgen -W "py js ts rust go java c cpp rb php sh md json yaml toml" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "py js ts rust go mojo java c cpp rb php sh md json yaml toml" -- ${cur}) )
             return 0
             ;;
         --color)
@@ -124,8 +124,8 @@ _hygrep() {
     local -a opts
     opts=(
         '-n[Number of results]:count:'
-        '-t[Filter by file type]:type:(py js ts rust go java c cpp rb php sh md json yaml toml)'
-        '--type[Filter by file type]:type:(py js ts rust go java c cpp rb php sh md json yaml toml)'
+        '-t[Filter by file type]:type:(py js ts rust go mojo java c cpp rb php sh md json yaml toml)'
+        '--type[Filter by file type]:type:(py js ts rust go mojo java c cpp rb php sh md json yaml toml)'
         '-C[Show N lines of context]:lines:'
         '--context[Show N lines of context]:lines:'
         '-q[Suppress progress messages]'
@@ -152,7 +152,7 @@ _hygrep "$@"
 
 FISH_COMPLETION = '''
 complete -c hygrep -s n -d "Number of results"
-complete -c hygrep -s t -l type -d "Filter by file type" -xa "py js ts rust go java c cpp rb php sh md json yaml toml"
+complete -c hygrep -s t -l type -d "Filter by file type" -xa "py js ts rust go mojo java c cpp rb php sh md json yaml toml"
 complete -c hygrep -s C -l context -d "Show N lines of context"
 complete -c hygrep -s q -l quiet -d "Suppress progress messages"
 complete -c hygrep -s v -l version -d "Show version"
@@ -336,6 +336,7 @@ def main():
             "ts": [".ts", ".tsx"],
             "rust": [".rs"],
             "go": [".go"],
+            "mojo": [".mojo", ".🔥"],
             "java": [".java"],
             "c": [".c", ".h"],
             "cpp": [".cpp", ".cc", ".cxx", ".hpp", ".hh"],
