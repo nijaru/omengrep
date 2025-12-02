@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pathspec
@@ -65,6 +66,88 @@ def is_regex_pattern(query: str) -> bool:
     return any(c in query for c in "*()[]\\|+?^$")
 
 
+BASH_COMPLETION = '''
+_hygrep() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="-n -t -C -q -v -h --json --fast --quiet --version --help --type --context --max-candidates --color --no-ignore --stats --min-score --exclude"
+
+    case "${prev}" in
+        -t|--type)
+            COMPREPLY=( $(compgen -W "py js ts rust go java c cpp rb php sh md json yaml toml" -- ${cur}) )
+            return 0
+            ;;
+        --color)
+            COMPREPLY=( $(compgen -W "auto always never" -- ${cur}) )
+            return 0
+            ;;
+        -n|-C|--max-candidates|--min-score)
+            return 0
+            ;;
+    esac
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+
+    COMPREPLY=( $(compgen -d -- ${cur}) )
+}
+complete -F _hygrep hygrep
+'''
+
+ZSH_COMPLETION = '''
+#compdef hygrep
+
+_hygrep() {
+    local -a opts
+    opts=(
+        '-n[Number of results]:count:'
+        '-t[Filter by file type]:type:(py js ts rust go java c cpp rb php sh md json yaml toml)'
+        '--type[Filter by file type]:type:(py js ts rust go java c cpp rb php sh md json yaml toml)'
+        '-C[Show N lines of context]:lines:'
+        '--context[Show N lines of context]:lines:'
+        '-q[Suppress progress messages]'
+        '--quiet[Suppress progress messages]'
+        '-v[Show version]'
+        '--version[Show version]'
+        '-h[Show help]'
+        '--help[Show help]'
+        '--json[Output JSON for agents]'
+        '--fast[Skip neural reranking]'
+        '--max-candidates[Max candidates to rerank]:count:'
+        '--color[Color output]:when:(auto always never)'
+        '--no-ignore[Ignore .gitignore files]'
+        '--stats[Show timing statistics]'
+        '--min-score[Filter results below score]:score:'
+        '--exclude[Exclude files matching pattern]:pattern:'
+    )
+    _arguments -s $opts '*:directory:_files -/'
+}
+
+_hygrep "$@"
+'''
+
+FISH_COMPLETION = '''
+complete -c hygrep -s n -d "Number of results"
+complete -c hygrep -s t -l type -d "Filter by file type" -xa "py js ts rust go java c cpp rb php sh md json yaml toml"
+complete -c hygrep -s C -l context -d "Show N lines of context"
+complete -c hygrep -s q -l quiet -d "Suppress progress messages"
+complete -c hygrep -s v -l version -d "Show version"
+complete -c hygrep -s h -l help -d "Show help"
+complete -c hygrep -l json -d "Output JSON for agents"
+complete -c hygrep -l fast -d "Skip neural reranking"
+complete -c hygrep -l max-candidates -d "Max candidates to rerank"
+complete -c hygrep -l color -d "Color output" -xa "auto always never"
+complete -c hygrep -l no-ignore -d "Ignore .gitignore files"
+complete -c hygrep -l stats -d "Show timing statistics"
+complete -c hygrep -l min-score -d "Filter results below score"
+complete -c hygrep -l exclude -d "Exclude files matching pattern"
+'''
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="hygrep",
@@ -95,8 +178,34 @@ def main():
         "-C", "--context", type=int, default=0, metavar="N",
         help="Show N lines of context from matched content"
     )
+    parser.add_argument(
+        "--stats", action="store_true",
+        help="Show timing statistics"
+    )
+    parser.add_argument(
+        "--min-score", type=float, default=0.0, metavar="N",
+        help="Filter results below this score threshold"
+    )
+    parser.add_argument(
+        "--exclude", action="append", default=[], metavar="PATTERN",
+        help="Exclude files matching glob pattern (can be repeated)"
+    )
+    parser.add_argument(
+        "--completions", choices=["bash", "zsh", "fish"],
+        help="Output shell completion script and exit"
+    )
 
     args = parser.parse_args()
+
+    # Handle completions
+    if args.completions:
+        if args.completions == "bash":
+            print(BASH_COMPLETION.strip())
+        elif args.completions == "zsh":
+            print(ZSH_COMPLETION.strip())
+        elif args.completions == "fish":
+            print(FISH_COMPLETION.strip())
+        sys.exit(0)
 
     # Determine color usage
     if args.color == "always":
@@ -131,6 +240,10 @@ def main():
     if not args.quiet and not args.json:
         print(f"Searching for '{args.query}' in {args.path}", file=sys.stderr)
 
+    # Stats tracking
+    stats = {"scan_ms": 0, "filter_ms": 0, "rerank_ms": 0, "total_ms": 0}
+    total_start = time.perf_counter()
+
     # Query expansion: "login auth" -> "login|auth" for better recall
     scanner_query = args.query
     if " " in args.query and not is_regex_pattern(args.query):
@@ -143,7 +256,11 @@ def main():
         print("Error: _scanner.so not found. Run: mojo build src/scanner/_scanner.mojo --emit shared-lib -o src/hygrep/_scanner.so", file=sys.stderr)
         sys.exit(EXIT_ERROR)
 
+    scan_start = time.perf_counter()
     file_contents = scan(str(root), scanner_query)
+    stats["scan_ms"] = int((time.perf_counter() - scan_start) * 1000)
+
+    filter_start = time.perf_counter()
 
     # Filter by gitignore (unless --no-ignore)
     if not args.no_ignore:
@@ -154,6 +271,14 @@ def main():
                 k: v for k, v in file_contents.items()
                 if not gitignore_spec.match_file(k.lstrip("./"))
             }
+
+    # Filter by exclude patterns
+    if args.exclude:
+        exclude_spec = pathspec.PathSpec.from_lines("gitwildmatch", args.exclude)
+        file_contents = {
+            k: v for k, v in file_contents.items()
+            if not exclude_spec.match_file(k.lstrip("./"))
+        }
 
     # Filter by file type if specified
     if args.file_types:
@@ -185,6 +310,8 @@ def main():
             k: v for k, v in file_contents.items() if any(k.endswith(ext) for ext in allowed_exts)
         }
 
+    stats["filter_ms"] = int((time.perf_counter() - filter_start) * 1000)
+
     if not args.quiet and not args.json:
         print(f"Found {len(file_contents)} candidates", file=sys.stderr)
 
@@ -194,6 +321,7 @@ def main():
         sys.exit(EXIT_NO_MATCH)
 
     # 2. Rerank phase (or fast mode)
+    rerank_start = time.perf_counter()
     if args.fast:
         # Fast mode: skip neural reranking, just return grep matches with extraction
         from .extractor import ContextExtractor
@@ -222,6 +350,13 @@ def main():
         results = reranker.search(
             args.query, file_contents, top_k=args.n, max_candidates=args.max_candidates
         )
+
+    stats["rerank_ms"] = int((time.perf_counter() - rerank_start) * 1000)
+    stats["total_ms"] = int((time.perf_counter() - total_start) * 1000)
+
+    # Filter by min-score (only in rerank mode)
+    if args.min_score > 0 and not args.fast:
+        results = [r for r in results if r["score"] >= args.min_score]
 
     if args.json:
         print(json.dumps(results))
@@ -262,6 +397,14 @@ def main():
             if len(lines) > args.context:
                 print(f"  {c.MAGENTA}... ({len(lines) - args.context} more lines){c.RESET}")
             print()  # Blank line between results
+
+    # Show stats if requested
+    if args.stats:
+        print(f"\n{c.BOLD}Stats:{c.RESET}", file=sys.stderr)
+        print(f"  Scan:   {stats['scan_ms']:>5}ms", file=sys.stderr)
+        print(f"  Filter: {stats['filter_ms']:>5}ms", file=sys.stderr)
+        print(f"  Rerank: {stats['rerank_ms']:>5}ms", file=sys.stderr)
+        print(f"  Total:  {stats['total_ms']:>5}ms", file=sys.stderr)
 
     sys.exit(EXIT_MATCH)
 

@@ -67,6 +67,20 @@ hygrep "config" . --no-ignore
 
 # Disable color output
 hygrep "error" . --color=never
+
+# Show timing statistics
+hygrep "test" . --stats
+
+# Filter by minimum score
+hygrep "auth" . --min-score 0.5
+
+# Exclude patterns
+hygrep "test" . --exclude "*.test.js" --exclude "tests/*"
+
+# Generate shell completions
+hygrep --completions bash >> ~/.bashrc
+hygrep --completions zsh >> ~/.zshrc
+hygrep --completions fish > ~/.config/fish/completions/hygrep.fish
 ```
 
 ### Output
