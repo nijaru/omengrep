@@ -2,20 +2,22 @@ from src.scanner.walker import hyper_scan
 from src.inference.reranker import Reranker
 from pathlib import Path
 from python import Python, PythonObject
+from sys import stderr
 import sys
 
 fn print_help():
     print("hygrep - Hybrid search CLI: grep speed + LLM intelligence")
     print("")
-    print("Usage: hygrep <query> [path] [--json]")
+    print("Usage: hygrep <query> [path] [options]")
     print("")
     print("Arguments:")
     print("  query     Search query (natural language or regex)")
     print("  path      Directory to search (default: current directory)")
     print("")
     print("Options:")
-    print("  --json    Output structured JSON for agents")
-    print("  --help    Show this help message")
+    print("  --json      Output structured JSON for agents")
+    print("  --top-k N   Number of results to return (default: 10)")
+    print("  --help      Show this help message")
 
 fn main() raises:
     var args = sys.argv()
@@ -23,16 +25,25 @@ fn main() raises:
     var query = ""
     var path_str = "."
     var json_mode = False
+    var top_k = 10
+    var expect_top_k = False
 
     # Simple manual arg parsing
     # skips args[0] (program name)
     for i in range(1, len(args)):
         var arg = args[i]
-        if arg == "--help" or arg == "-h":
+        if expect_top_k:
+            top_k = Int(atol(arg))
+            expect_top_k = False
+        elif arg == "--help" or arg == "-h":
             print_help()
             return
         elif arg == "--json":
             json_mode = True
+        elif arg == "--top-k":
+            expect_top_k = True
+        elif arg.startswith("--top-k="):
+            top_k = Int(atol(arg[8:]))
         elif query == "":
             query = arg
         elif path_str == ".":
@@ -52,14 +63,14 @@ fn main() raises:
         if json_mode:
             print('{"error": "Path does not exist: ' + path_str + '"}')
         else:
-            print("Error: Path does not exist: " + path_str)
+            print("Error: Path does not exist: " + path_str, file=stderr)
         return
 
     if not root.is_dir():
         if json_mode:
             print('{"error": "Path is not a directory: ' + path_str + '"}')
         else:
-            print("Error: Path is not a directory: " + path_str)
+            print("Error: Path is not a directory: " + path_str, file=stderr)
         return
     
     if not json_mode:
@@ -102,11 +113,11 @@ fn main() raises:
     var brain = Reranker()
     
     if json_mode:
-        var json_res = brain.search_raw(query, matches)
+        var json_res = brain.search_raw(query, matches, top_k)
         print(json_res)
         return
-    
-    var results = brain.search(query, matches)
+
+    var results = brain.search(query, matches, top_k)
     var num_results = Int(len(results))
     
     if num_results == 0:

@@ -132,7 +132,7 @@ def init_searcher(model_path: str, tokenizer_path: str):
     global _searcher
     _searcher = SmartSearcher(model_path, tokenizer_path)
 
-def run_search(query: str, file_paths: list[str]) -> str:
+def run_search(query: str, file_paths: list[str], top_k: int = 10) -> str:
     if _searcher is None:
         return json.dumps({"error": "Searcher not initialized"})
-    return _searcher.search(query, file_paths)
+    return _searcher.search(query, file_paths, top_k)

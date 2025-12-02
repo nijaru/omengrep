@@ -1,6 +1,7 @@
 from python import Python, PythonObject
 from collections import List
 from pathlib import Path
+from sys import stderr
 
 struct Reranker:
     var _bridge: PythonObject
@@ -34,27 +35,27 @@ struct Reranker:
             self._bridge.init_searcher(model_path, tokenizer_path)
             self._initialized = True
         except e:
-            print("Failed to initialize Smart Searcher: " + String(e))
+            print("Failed to initialize Smart Searcher: " + String(e), file=stderr)
 
-    fn search_raw(self, query: String, files: List[Path]) raises -> String:
+    fn search_raw(self, query: String, files: List[Path], top_k: Int = 10) raises -> String:
         """
         Returns the raw JSON string result from the bridge.
         """
         if not self._initialized:
             return "[]"
-            
+
         var py_files = Python.evaluate("[]")
         for i in range(len(files)):
             _ = py_files.append(String(files[i]))
-            
-        var json_str = self._bridge.run_search(query, py_files)
+
+        var json_str = self._bridge.run_search(query, py_files, top_k)
         return String(json_str)
 
-    fn search(self, query: String, files: List[Path]) raises -> PythonObject:
+    fn search(self, query: String, files: List[Path], top_k: Int = 10) raises -> PythonObject:
         """
         Executes the smart search pipeline via Python bridge.
         Returns a Python List of Dicts.
         """
-        var json_str = self.search_raw(query, files)
+        var json_str = self.search_raw(query, files, top_k)
         var json = Python.import_module("json")
         return json.loads(json_str)

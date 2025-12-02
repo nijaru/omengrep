@@ -1,7 +1,9 @@
 from pathlib import Path
-from collections import List
+from collections import List, Set
 from algorithm import parallelize
 from memory import UnsafePointer, alloc
+from os.path import realpath
+from sys import stderr
 from src.scanner.c_regex import Regex
 
 fn is_ignored_dir(name: String) -> Bool:
@@ -57,7 +59,8 @@ fn scan_file(file: Path, re: Regex) -> Bool:
 fn hyper_scan(root: Path, pattern: String) raises -> List[Path]:
     var candidates = List[Path]()
     var all_files = List[Path]()
-    
+    var visited = Set[String]()  # Track visited dirs to avoid symlink loops
+
     # 1. Collect files (Single Threaded for now)
     var stack = List[Path]()
     stack.append(root)
@@ -65,18 +68,27 @@ fn hyper_scan(root: Path, pattern: String) raises -> List[Path]:
     while len(stack) > 0:
         var current = stack.pop()
         if current.is_dir():
+            # Check for circular symlinks
+            try:
+                var real = realpath(current)
+                if real in visited:
+                    continue  # Already visited this directory
+                visited.add(real)
+            except:
+                pass  # If realpath fails, continue anyway
+
             try:
                 var entries = current.listdir()
                 for i in range(len(entries)):
                     var entry = entries[i]
                     var full_path = current / entry
-                    
+
                     # Helper to get name string
                     var name_str = entry.name()
-                    
+
                     if name_str.startswith("."):
                         continue
-                        
+
                     if full_path.is_dir():
                         if is_ignored_dir(name_str):
                             continue
@@ -86,7 +98,7 @@ fn hyper_scan(root: Path, pattern: String) raises -> List[Path]:
                             continue
                         all_files.append(full_path)
             except:
-                print("Error accessing: " + String(current))
+                print("Error accessing: " + String(current), file=stderr)
                 continue
         else:
             all_files.append(current)
