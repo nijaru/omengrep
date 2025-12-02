@@ -12,7 +12,8 @@
 - **Semantic Reranking:** "auth" matches "login"
 - **Agent Ready:** JSON output with `--json`
 - **Fast:** Parallel Mojo scanner, ~20k files/sec
-- **Robust:** Ignores node_modules, binaries, hidden files
+- **Robust:** Ignores node_modules, binaries, hidden files, .gitignore
+- **Color Output:** Colored paths, types, and scores (respects NO_COLOR)
 
 ## Installation
 
@@ -57,6 +58,15 @@ hygrep "test" . -q
 
 # Limit candidates for faster reranking
 hygrep "query" ./large-codebase --max-candidates 50
+
+# Show code context (5 lines)
+hygrep "auth" . -C 5
+
+# Include gitignored files
+hygrep "config" . --no-ignore
+
+# Disable color output
+hygrep "error" . --color=never
 ```
 
 ### Output

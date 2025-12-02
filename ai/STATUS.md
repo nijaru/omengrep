@@ -10,13 +10,13 @@
 
 ## Active Work
 
-Phase 7 CLI polish - making hygrep feel like a modern CLI tool.
+Phase 7 CLI polish complete. Ready for P3 features or distribution.
 
-Priority features:
-1. Color output (hgrep-zxs)
-2. Gitignore support (hgrep-qof)
-3. Exit codes (hgrep-bu6)
-4. Context lines (hgrep-rj4)
+Completed P2:
+- Color output with --color flag (hgrep-zxs)
+- Gitignore filtering with pathspec (hgrep-qof)
+- Grep-compatible exit codes (hgrep-bu6)
+- Context lines with -C flag (hgrep-rj4)
 
 ## Completed (Recent)
 

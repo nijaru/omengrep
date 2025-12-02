@@ -2,10 +2,62 @@
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
+import pathspec
+
 from . import __version__
+
+# Exit codes (grep convention)
+EXIT_MATCH = 0
+EXIT_NO_MATCH = 1
+EXIT_ERROR = 2
+
+# ANSI color codes
+class Colors:
+    CYAN = "\033[36m"
+    YELLOW = "\033[33m"
+    GREEN = "\033[32m"
+    MAGENTA = "\033[35m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+
+def use_color() -> bool:
+    """Check if we should use color output."""
+    # NO_COLOR standard: https://no-color.org/
+    if os.environ.get("NO_COLOR"):
+        return False
+    # Check if stdout is a TTY
+    if not sys.stdout.isatty():
+        return False
+    return True
+
+
+def load_gitignore(root: Path) -> pathspec.PathSpec | None:
+    """Load .gitignore patterns from root directory and parents."""
+    patterns = []
+
+    # Walk up to find git root
+    current = root.resolve()
+    while current != current.parent:
+        gitignore = current / ".gitignore"
+        if gitignore.exists():
+            try:
+                patterns.extend(gitignore.read_text().splitlines())
+            except (OSError, UnicodeDecodeError):
+                pass
+        # Stop at git root
+        if (current / ".git").exists():
+            break
+        current = current.parent
+
+    if not patterns:
+        return None
+
+    return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
 
 def is_regex_pattern(query: str) -> bool:
@@ -31,15 +83,35 @@ def main():
     parser.add_argument(
         "--max-candidates", type=int, default=100, help="Max candidates to rerank (default: 100)"
     )
+    parser.add_argument(
+        "--color", choices=["auto", "always", "never"], default="auto",
+        help="Color output (default: auto)"
+    )
+    parser.add_argument(
+        "--no-ignore", action="store_true",
+        help="Don't respect .gitignore files"
+    )
+    parser.add_argument(
+        "-C", "--context", type=int, default=0, metavar="N",
+        help="Show N lines of context from matched content"
+    )
 
     args = parser.parse_args()
+
+    # Determine color usage
+    if args.color == "always":
+        color = True
+    elif args.color == "never":
+        color = False
+    else:
+        color = use_color() and not args.json
 
     if not args.query:
         if args.json:
             print("[]")
         else:
             parser.print_help()
-        return
+        sys.exit(EXIT_NO_MATCH)
 
     root = Path(args.path)
     if not root.exists():
@@ -47,14 +119,14 @@ def main():
             print(json.dumps({"error": f"Path does not exist: {args.path}"}))
         else:
             print(f"Error: Path does not exist: {args.path}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_ERROR)
 
     if not root.is_dir():
         if args.json:
             print(json.dumps({"error": f"Path is not a directory: {args.path}"}))
         else:
             print(f"Error: Path is not a directory: {args.path}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_ERROR)
 
     if not args.quiet and not args.json:
         print(f"Searching for '{args.query}' in {args.path}", file=sys.stderr)
@@ -69,9 +141,19 @@ def main():
         from ._scanner import scan
     except ImportError:
         print("Error: _scanner.so not found. Run: mojo build src/scanner/_scanner.mojo --emit shared-lib -o src/hygrep/_scanner.so", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_ERROR)
 
     file_contents = scan(str(root), scanner_query)
+
+    # Filter by gitignore (unless --no-ignore)
+    if not args.no_ignore:
+        gitignore_spec = load_gitignore(root)
+        if gitignore_spec:
+            # Scanner returns paths relative to root or with ./ prefix
+            file_contents = {
+                k: v for k, v in file_contents.items()
+                if not gitignore_spec.match_file(k.lstrip("./"))
+            }
 
     # Filter by file type if specified
     if args.file_types:
@@ -109,7 +191,7 @@ def main():
     if len(file_contents) == 0:
         if args.json:
             print("[]")
-        return
+        sys.exit(EXIT_NO_MATCH)
 
     # 2. Rerank phase (or fast mode)
     if args.fast:
@@ -143,23 +225,45 @@ def main():
 
     if args.json:
         print(json.dumps(results))
-        return
+        sys.exit(EXIT_MATCH if results else EXIT_NO_MATCH)
 
     if not results:
         print("No relevant results.", file=sys.stderr)
-        return
+        sys.exit(EXIT_NO_MATCH)
 
-    # Output results
+    # Output results with optional color
+    c = Colors if color else type("NoColor", (), {k: "" for k in dir(Colors) if not k.startswith("_")})()
     for item in results:
         file = item["file"]
         name = item["name"]
         score = item["score"]
         kind = item["type"]
         start_line = item["start_line"]
+        content = item.get("content", "")
+
+        # Format: path:line [type] name (score)
+        path_str = f"{c.CYAN}{file}{c.RESET}:{c.GREEN}{start_line}{c.RESET}"
+        type_str = f"{c.YELLOW}[{kind}]{c.RESET}"
+        name_str = f"{c.BOLD}{name}{c.RESET}"
+
         if args.fast:
-            print(f"{file}:{start_line} [{kind}] {name}")
+            print(f"{path_str} {type_str} {name_str}")
         else:
-            print(f"{file}:{start_line} [{kind}] {name} ({score})")
+            score_str = f"{c.MAGENTA}({score:.2f}){c.RESET}"
+            print(f"{path_str} {type_str} {name_str} {score_str}")
+
+        # Show context if requested
+        if args.context > 0 and content:
+            lines = content.splitlines()
+            context_lines = lines[:args.context]
+            for i, line in enumerate(context_lines):
+                line_num = start_line + i
+                print(f"  {c.GREEN}{line_num:4d}{c.RESET} | {line}")
+            if len(lines) > args.context:
+                print(f"  {c.MAGENTA}... ({len(lines) - args.context} more lines){c.RESET}")
+            print()  # Blank line between results
+
+    sys.exit(EXIT_MATCH)
 
 
 if __name__ == "__main__":
