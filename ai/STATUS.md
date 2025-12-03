@@ -18,6 +18,12 @@ None.
 
 ## Completed (Recent)
 
+### CLI Improvements (2025-12-03)
+
+- Add progress bar for reranking batches (Rich Progress)
+- Add syntax highlighting for code context (Rich Syntax, 40+ extensions)
+- Modernize CLI with Typer + Rich (visible subcommands, examples panel)
+
 ### v0.0.5 Release (2025-12-03)
 
 - Add 11 new language grammars (22 total): Bash, PHP, Kotlin, Lua, Swift, Elixir, Zig, Svelte, YAML, TOML, JSON
