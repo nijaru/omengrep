@@ -63,8 +63,17 @@ def _setup_hf_cache() -> Path:
     return Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
 
 
-def get_model_paths(force_download: bool = False) -> tuple[str, str]:
-    """Get paths to model files, downloading if needed.
+class ModelNotInstalledError(Exception):
+    """Raised when model is not installed and local_files_only=True."""
+
+    pass
+
+
+def get_model_paths() -> tuple[str, str]:
+    """Get paths to cached model files (offline, no network).
+
+    Raises:
+        ModelNotInstalledError: If model is not installed
 
     Returns:
         Tuple of (model_path, tokenizer_path)
@@ -72,23 +81,29 @@ def get_model_paths(force_download: bool = False) -> tuple[str, str]:
     _setup_hf_cache()
 
     from huggingface_hub import hf_hub_download
+    from huggingface_hub.utils import LocalEntryNotFoundError
 
-    model_path = hf_hub_download(
-        repo_id=MODEL_REPO,
-        filename=MODEL_FILE,
-        force_download=force_download,
-    )
-    tokenizer_path = hf_hub_download(
-        repo_id=MODEL_REPO,
-        filename=TOKENIZER_FILE,
-        force_download=force_download,
-    )
+    try:
+        model_path = hf_hub_download(
+            repo_id=MODEL_REPO,
+            filename=MODEL_FILE,
+            local_files_only=True,
+        )
+        tokenizer_path = hf_hub_download(
+            repo_id=MODEL_REPO,
+            filename=TOKENIZER_FILE,
+            local_files_only=True,
+        )
+    except LocalEntryNotFoundError:
+        raise ModelNotInstalledError(
+            "Model not installed. Run 'hygrep model install' first."
+        ) from None
 
     return model_path, tokenizer_path
 
 
 def download_model(force: bool = False, quiet: bool = False) -> tuple[str, str]:
-    """Download model files.
+    """Download model files from HuggingFace Hub.
 
     Args:
         force: Force re-download even if cached
@@ -97,10 +112,23 @@ def download_model(force: bool = False, quiet: bool = False) -> tuple[str, str]:
     Returns:
         Tuple of (model_path, tokenizer_path)
     """
+    _setup_hf_cache()
+
+    from huggingface_hub import hf_hub_download
+
     if not quiet:
         print(f"Downloading model from {MODEL_REPO}...", file=sys.stderr)
 
-    model_path, tokenizer_path = get_model_paths(force_download=force)
+    model_path = hf_hub_download(
+        repo_id=MODEL_REPO,
+        filename=MODEL_FILE,
+        force_download=force,
+    )
+    tokenizer_path = hf_hub_download(
+        repo_id=MODEL_REPO,
+        filename=TOKENIZER_FILE,
+        force_download=force,
+    )
 
     if not quiet:
         size_mb = os.path.getsize(model_path) / 1024 / 1024

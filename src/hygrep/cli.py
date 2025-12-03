@@ -17,6 +17,7 @@ import pathspec
 from . import __version__
 from .reranker import (
     MODEL_REPO,
+    ModelNotInstalledError,
     clean_model_cache,
     download_model,
     get_execution_providers,
@@ -502,7 +503,18 @@ def main():
 
         from .reranker import Reranker
 
-        reranker = Reranker()
+        try:
+            reranker = Reranker()
+        except ModelNotInstalledError:
+            if args.json:
+                print(json.dumps({"error": "Model not installed"}))
+            else:
+                print(
+                    "Error: Model not installed. Run 'hygrep model install' first.",
+                    file=sys.stderr,
+                )
+            sys.exit(EXIT_ERROR)
+
         results = reranker.search(
             args.query, file_contents, top_k=args.n, max_candidates=args.max_candidates
         )
