@@ -1,8 +1,12 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.0.2)'
+        required: true
+        type: string
 
 jobs:
   build-wheels:
