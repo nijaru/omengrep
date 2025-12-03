@@ -23,6 +23,7 @@ None.
 - Add progress bar for reranking batches (Rich Progress)
 - Add syntax highlighting for code context (Rich Syntax, 40+ extensions)
 - Modernize CLI with Typer + Rich (visible subcommands, examples panel)
+- Refactor: move imports to module level, extract EXT_TO_LEXER constant
 
 ### v0.0.5 Release (2025-12-03)
 
