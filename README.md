@@ -4,7 +4,7 @@
 
 ```bash
 pip install hygrep
-hygrep "auth logic" ./src
+hygrep "auth logic" ./src   # or: hhg "auth logic" ./src
 ```
 
 ## What it does
