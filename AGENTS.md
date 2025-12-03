@@ -1,14 +1,14 @@
-# hygrep
+# hygrep (hhg)
 
-**Hybrid search CLI: grep speed + LLM intelligence. Stateless, no indexing.**
+**Hyper hybrid grep: fast scanning + neural reranking. Stateless, no indexing.**
 
 ## Quick Reference
 
 ```bash
-pixi run build-ext               # Build Mojo scanner extension
-pixi run hygrep "query" ./src    # Search
-pixi run hygrep "query" . --json # Agent output
-pixi run test                    # Run all tests
+pixi run build-ext            # Build Mojo scanner extension
+pixi run hhg "query" ./src    # Search
+pixi run hhg "query" . --json # Agent output
+pixi run test                 # Run all tests
 ```
 
 ## Architecture

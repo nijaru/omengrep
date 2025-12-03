@@ -53,7 +53,6 @@ dev = [
 ]
 
 [project.scripts]
-hygrep = "hygrep.cli:main"
 hhg = "hygrep.cli:main"
 
 [project.urls]

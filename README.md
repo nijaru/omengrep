@@ -1,10 +1,10 @@
-# hygrep
+# hygrep (hhg)
 
 **Hyper hybrid grep: fast scanning + neural reranking**
 
 ```bash
 pip install hygrep
-hygrep "auth logic" ./src   # or: hhg "auth logic" ./src
+hhg "auth logic" ./src
 ```
 
 ## What it does
@@ -24,23 +24,25 @@ uv tool install hygrep
 pipx install hygrep
 ```
 
+The binary name for hygrep is `hhg`.
+
 First search downloads the model (~83MB, cached in `~/.cache/huggingface/`).
 
 ## Usage
 
 ```bash
-hygrep "query" [path]           # Search (default: current dir)
-hygrep "error handling" . -n 5  # Limit to 5 results
-hygrep "auth" . --fast          # Skip reranking (instant grep)
-hygrep "test" . -t py,js        # Filter by file type
-hygrep "config" . --json        # JSON output for agents/scripts
-hygrep info                     # Check installation status
-hygrep model                    # Show model info
-hygrep model install            # Pre-download model (for CI/offline)
-hygrep model clean              # Remove cached model
+hhg "query" [path]           # Search (default: current dir)
+hhg "error handling" . -n 5  # Limit to 5 results
+hhg "auth" . --fast          # Skip reranking (instant grep)
+hhg "test" . -t py,js        # Filter by file type
+hhg "config" . --json        # JSON output for agents/scripts
+hhg info                     # Check installation status
+hhg model                    # Show model info
+hhg model install            # Pre-download model (for CI/offline)
+hhg model clean              # Remove cached model
 ```
 
-Run `hygrep --help` for all options.
+Run `hhg --help` for all options.
 
 ## Output
 

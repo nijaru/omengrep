@@ -32,8 +32,8 @@ tree-sitter-mojo = { git = "https://github.com/lsh/tree-sitter-mojo.git" }
 [tasks]
 # Build Mojo scanner as Python extension
 build-ext = "mojo build src/scanner/_scanner.mojo --emit shared-lib -o src/hygrep/_scanner.so"
-# Run Python CLI
-hygrep = { cmd = "python -m hygrep.cli", env = { PYTHONPATH = "src" } }
+# Run CLI
+hhg = { cmd = "python -m hygrep.cli", env = { PYTHONPATH = "src" } }
 # Run Mojo tests
 test-mojo = "mojo -I . tests/test_regex_smoke.mojo && mojo -I . tests/test_scanner.mojo"
 # Run Python tests
