@@ -3,7 +3,7 @@
 | Metric | Value | Updated |
 |--------|-------|---------|
 | Phase | 8 (Hardening) | 2025-12-02 |
-| Version | 0.0.2 | 2025-12-02 |
+| Version | 0.0.1 | 2025-12-02 |
 | Perf | ~20k files/sec (Mojo) | 2025-12-02 |
 | Inference | ~2s/100 candidates (CPU) | 2025-12-02 |
 | Mojo | v25.7 | 2025-12-01 |
