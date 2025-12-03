@@ -1,6 +1,6 @@
 # hygrep
 
-> **Hybrid grep: fast scanning + neural reranking**
+> **Hyper + Hybrid grep: fast scanning + neural reranking**
 
 `hygrep` combines the instant performance of parallel regex scanning (Mojo) with semantic understanding via neural reranking (ONNX).
 
@@ -8,7 +8,7 @@
 
 ## Features
 
-- **Smart Context:** Extracts full functions/classes (Python, JS, TS, Go, Rust)
+- **Smart Context:** Extracts full functions/classes (Python, JS, TS, Go, Rust, Mojo)
 - **Semantic Reranking:** "auth" matches "login"
 - **Agent Ready:** JSON output with `--json`
 - **Fast:** Parallel Mojo scanner, ~20k files/sec
@@ -84,6 +84,9 @@ hygrep --completions fish > ~/.config/fish/completions/hygrep.fish
 
 # Include hidden files
 hygrep "TODO" . --hidden
+
+# Check installation status
+hygrep info
 ```
 
 ### Config File
@@ -144,7 +147,7 @@ Query → [Mojo Scanner] → candidates → [ONNX Reranker] → results
 |-----------|----------------|
 | Scanner | Mojo Python extension (`_scanner.so`) |
 | Extraction | Tree-sitter (Python, JS, TS, Go, Rust, Mojo) |
-| Reranking | ONNX Runtime (`mxbai-rerank-xsmall-v1`) |
+| Reranking | ONNX Runtime (`mxbai-rerank-xsmall-v1`) + GPU auto-detect |
 
 ## Development
 

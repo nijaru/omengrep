@@ -89,3 +89,38 @@ hygrep (Python CLI) → _scanner.so (Mojo extension) → reranker (Python/ONNX)
 - GPU acceleration (onnxruntime-gpu) - 5-10x faster inference
 - Daemon mode with warm model - eliminate load time
 - Smaller model - quality tradeoff
+
+## 8. GPU Acceleration Investigation (2025-12-02)
+
+**Findings:**
+
+| Option | Status | Notes |
+|--------|--------|-------|
+| MAX Engine | ❌ Not viable | Only supports specific GenAI architectures (LLMs), not arbitrary ONNX cross-encoders |
+| ONNX Runtime + CoreML (macOS) | ⚠️ Complex | Not in conda-forge, requires custom build or pypi `onnxruntime-silicon` |
+| ONNX Runtime + CUDA (Linux) | ⚠️ Complex | SELinux issues on Fedora, Python 3.13 compatibility gaps |
+| PyTorch + transformers | ⚠️ Heavy | +2GB dependencies, different inference path |
+| CPU baseline | ✅ Working | 1.7s/batch@32, ~19 pairs/sec - acceptable for 100 candidates |
+
+**Decision:** Stay with CPU ONNX Runtime, auto-detect GPU when available
+
+**Rationale:**
+1. Current performance is acceptable (2-3s total for typical search)
+2. GPU providers are fragmented and platform-specific
+3. Auto-detection code already in place (`get_execution_providers()`)
+4. When `onnxruntime-gpu` becomes more available, it will "just work"
+
+**Code pattern (already implemented in reranker.py):**
+```python
+def get_execution_providers() -> list:
+    available = ort.get_available_providers()
+    preferred = ['CUDAExecutionProvider', 'CoreMLExecutionProvider',
+                 'DmlExecutionProvider', 'CPUExecutionProvider']
+    return [p for p in preferred if p in available] or ['CPUExecutionProvider']
+```
+
+**Why MAX Engine doesn't work:**
+- MAX Engine is optimized for LLM inference (transformer decoder architectures)
+- Our model is a cross-encoder (BERT-like) which MAX doesn't recognize
+- Error: "cannot compile input with format input has unknown contents"
+- Even non-quantized ONNX fails - it's an architecture mismatch, not format issue

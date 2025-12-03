@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -12,33 +13,64 @@ from concurrent.futures import ThreadPoolExecutor
 from .extractor import ContextExtractor
 
 
+MODEL_REPO = "mixedbread-ai/mxbai-rerank-xsmall-v1"
+MODEL_FILE = "onnx/model_quantized.onnx"
+TOKENIZER_FILE = "tokenizer.json"
+MODEL_MIN_SIZE = 80_000_000  # ~83MB, sanity check
+
+
 def ensure_models(model_path: str, tokenizer_path: str):
-    """Download models if not present."""
-    if os.path.exists(model_path) and os.path.exists(tokenizer_path):
+    """Download models if not present or corrupted."""
+    # Check if files exist and are valid
+    if _models_valid(model_path, tokenizer_path):
         return
 
-    print("First run detected: Downloading AI models (40MB)...")
+    print("Downloading AI models (~83MB)...", file=sys.stderr)
     try:
         from huggingface_hub import hf_hub_download
         import shutil
-
-        MODEL_REPO = "mixedbread-ai/mxbai-rerank-xsmall-v1"
-        MODEL_FILE = "onnx/model_quantized.onnx"
-        TOKENIZER_FILE = "tokenizer.json"
 
         model_dir = os.path.dirname(model_path)
         if model_dir and not os.path.exists(model_dir):
             os.makedirs(model_dir)
 
-        print(f"Fetching {MODEL_REPO}...")
+        print(f"Fetching {MODEL_REPO}...", file=sys.stderr)
         m_path = hf_hub_download(repo_id=MODEL_REPO, filename=MODEL_FILE)
         t_path = hf_hub_download(repo_id=MODEL_REPO, filename=TOKENIZER_FILE)
 
         shutil.copy(m_path, model_path)
         shutil.copy(t_path, tokenizer_path)
-        print("Download complete.")
+
+        # Verify download
+        if not _models_valid(model_path, tokenizer_path):
+            raise RuntimeError("Downloaded files appear corrupted")
+
+        print("Download complete.", file=sys.stderr)
     except Exception as e:
-        print(f"Failed to download models: {e}")
+        # Clean up partial downloads
+        for f in [model_path, tokenizer_path]:
+            if os.path.exists(f):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+        raise RuntimeError(f"Failed to download models: {e}") from e
+
+
+def _models_valid(model_path: str, tokenizer_path: str) -> bool:
+    """Check if model files exist and appear valid."""
+    if not os.path.exists(model_path) or not os.path.exists(tokenizer_path):
+        return False
+    # Sanity check: model should be ~83MB
+    if os.path.getsize(model_path) < MODEL_MIN_SIZE:
+        return False
+    # Tokenizer should be valid JSON
+    try:
+        with open(tokenizer_path, 'r') as f:
+            json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    return True
 
 
 def get_execution_providers() -> list:
@@ -83,10 +115,14 @@ class Reranker:
         sess_options.inter_op_num_threads = 1
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-        # Auto-detect GPU providers
+        # Auto-detect GPU providers with fallback
         providers = get_execution_providers()
-        self.session = ort.InferenceSession(model_path, sess_options, providers=providers)
-        self.provider = self.session.get_providers()[0]  # Track which provider is active
+        try:
+            self.session = ort.InferenceSession(model_path, sess_options, providers=providers)
+        except Exception:
+            # GPU provider failed, fall back to CPU silently
+            self.session = ort.InferenceSession(model_path, sess_options, providers=['CPUExecutionProvider'])
+        self.provider = self.session.get_providers()[0]
 
     def search(
         self, query: str, file_contents: dict, top_k: int = 10, max_candidates: int = 100

@@ -7,7 +7,7 @@ import tree_sitter_typescript
 import tree_sitter_rust
 import tree_sitter_go
 import tree_sitter_mojo
-from tree_sitter import Language, Parser, Node, QueryCursor
+from tree_sitter import Language, Parser, Query, QueryCursor
 
 # Map extensions to language capsules
 LANGUAGE_CAPSULES = {
@@ -72,7 +72,7 @@ class ContextExtractor:
                 # Pre-compile queries
                 lang_name = self._ext_to_lang_name(ext)
                 if lang_name and lang_name in QUERIES:
-                    self.queries[ext] = lang.query(QUERIES[lang_name])
+                    self.queries[ext] = Query(lang, QUERIES[lang_name])
             except Exception as e:
                 print(f"Warning: Failed to load parser for {ext}: {e}")
 

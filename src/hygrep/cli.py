@@ -15,6 +15,7 @@ except ImportError:
 import pathspec
 
 from . import __version__
+from .reranker import _models_valid, get_execution_providers, MODEL_REPO
 
 # Config file location
 CONFIG_PATH = Path.home() / ".config" / "hygrep" / "config.toml"
@@ -34,6 +35,53 @@ def load_config() -> dict:
 EXIT_MATCH = 0
 EXIT_NO_MATCH = 1
 EXIT_ERROR = 2
+
+
+def show_info():
+    """Show system info and verify installation."""
+    print(f"hygrep {__version__}")
+    print()
+
+    # Check models
+    model_path = "models/reranker.onnx"
+    tokenizer_path = "models/tokenizer.json"
+    if _models_valid(model_path, tokenizer_path):
+        size_mb = os.path.getsize(model_path) / 1024 / 1024
+        print(f"Models:    OK ({size_mb:.0f}MB)")
+    else:
+        print(f"Models:    Not installed (run any search to download)")
+
+    # Check device/provider
+    providers = get_execution_providers()
+    provider = providers[0].replace("ExecutionProvider", "")
+    all_providers = ", ".join(p.replace("ExecutionProvider", "") for p in providers)
+    print(f"Device:    {provider}")
+    if len(providers) > 1:
+        print(f"           Available: {all_providers}")
+
+    # Check scanner
+    try:
+        from ._scanner import scan
+        print("Scanner:   OK (Mojo native)")
+    except ImportError:
+        print("Scanner:   Not built (run: pixi run build-ext)")
+
+    # Check tree-sitter languages
+    try:
+        from .extractor import LANGUAGE_CAPSULES
+        langs = [ext.lstrip(".") for ext in LANGUAGE_CAPSULES.keys() if not ext.startswith(".🔥")]
+        print(f"Languages: {', '.join(langs)}")
+    except ImportError:
+        print("Languages: Error loading tree-sitter")
+
+    # Config file
+    if CONFIG_PATH.exists():
+        print(f"Config:    {CONFIG_PATH}")
+    else:
+        print(f"Config:    (none)")
+
+    print()
+    print(f"Model: {MODEL_REPO}")
 
 # ANSI color codes
 class Colors:
@@ -262,6 +310,11 @@ def main():
         color = False
     else:
         color = use_color() and not args.json
+
+    # Handle 'hygrep info' command
+    if args.query == "info":
+        show_info()
+        sys.exit(EXIT_MATCH)
 
     if not args.query:
         if args.json:
