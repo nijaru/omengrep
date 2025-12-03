@@ -275,6 +275,7 @@ class Reranker:
         file_contents: dict,
         top_k: int = 10,
         max_candidates: int = 100,
+        progress_callback=None,
     ) -> list:
         """
         Full pipeline: Extract -> Rerank.
@@ -284,6 +285,7 @@ class Reranker:
             file_contents: Dict mapping file paths to contents
             top_k: Number of results to return
             max_candidates: Max candidates to rerank (caps inference cost)
+            progress_callback: Optional callback(current, total) for progress updates
 
         Returns:
             List of ranked results
@@ -328,8 +330,9 @@ class Reranker:
         all_logits = []
         input_names = [x.name for x in self.session.get_inputs()]
         use_token_type_ids = len(input_names) > 2
+        total_batches = (len(candidates) + BATCH_SIZE - 1) // BATCH_SIZE
 
-        for i in range(0, len(candidates), BATCH_SIZE):
+        for batch_idx, i in enumerate(range(0, len(candidates), BATCH_SIZE)):
             batch = candidates[i : i + BATCH_SIZE]
             pairs = [(query, c["score_text"]) for c in batch]
 
@@ -348,6 +351,10 @@ class Reranker:
 
             res = self.session.run(None, inputs)
             all_logits.extend(res[0].flatten())
+
+            # Report progress
+            if progress_callback:
+                progress_callback(batch_idx + 1, total_batches)
 
         # 3. Score and sort
         scored_results = []

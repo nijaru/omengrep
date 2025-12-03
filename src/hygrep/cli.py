@@ -340,17 +340,34 @@ def search(
             )
         results = results[:n]
     else:
+        from rich.progress import BarColumn, Progress, TextColumn
+
         from .reranker import Reranker
 
-        # Load model and rerank with spinner
+        reranker = Reranker()
+
+        # Rerank with progress bar
         if not quiet and not json_output:
-            with err_console.status("[bold blue]Reranking[/] with neural model...", spinner="dots"):
-                reranker = Reranker()
+            with Progress(
+                TextColumn("[bold blue]Reranking"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                console=err_console,
+                transient=True,
+            ) as progress:
+                task = progress.add_task("rerank", total=100)
+
+                def update_progress(current: int, total: int) -> None:
+                    progress.update(task, completed=int(current / total * 100))
+
                 results = reranker.search(
-                    query, file_contents, top_k=n, max_candidates=max_candidates
+                    query,
+                    file_contents,
+                    top_k=n,
+                    max_candidates=max_candidates,
+                    progress_callback=update_progress,
                 )
         else:
-            reranker = Reranker()
             results = reranker.search(query, file_contents, top_k=n, max_candidates=max_candidates)
 
     stats_data["rerank_ms"] = int((time.perf_counter() - rerank_start) * 1000)
@@ -522,6 +539,58 @@ def _load_gitignore(root: Path) -> pathspec.PathSpec | None:
     return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
 
+def _get_lexer_for_file(filepath: str) -> str | None:
+    """Get Pygments lexer name for a file based on extension."""
+    ext_map = {
+        ".py": "python",
+        ".pyi": "python",
+        ".js": "javascript",
+        ".jsx": "jsx",
+        ".ts": "typescript",
+        ".tsx": "tsx",
+        ".rs": "rust",
+        ".go": "go",
+        ".java": "java",
+        ".c": "c",
+        ".h": "c",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".hpp": "cpp",
+        ".hh": "cpp",
+        ".cs": "csharp",
+        ".rb": "ruby",
+        ".php": "php",
+        ".sh": "bash",
+        ".bash": "bash",
+        ".zsh": "zsh",
+        ".fish": "fish",
+        ".md": "markdown",
+        ".json": "json",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".toml": "toml",
+        ".html": "html",
+        ".css": "css",
+        ".scss": "scss",
+        ".sql": "sql",
+        ".lua": "lua",
+        ".vim": "vim",
+        ".swift": "swift",
+        ".kt": "kotlin",
+        ".scala": "scala",
+        ".r": "r",
+        ".R": "r",
+        ".mojo": "python",  # Closest approximation
+        ".🔥": "python",
+    }
+    ext = Path(filepath).suffix.lower()
+    # Handle emoji extension
+    if not ext and filepath.endswith(".🔥"):
+        ext = ".🔥"
+    return ext_map.get(ext)
+
+
 def _print_result(item: dict, fast: bool, use_color: bool, context: int):
     """Print a single search result."""
     file = item["file"]
@@ -546,22 +615,43 @@ def _print_result(item: dict, fast: bool, use_color: bool, context: int):
         else:
             print(f"{file}:{start_line} [{kind}] {name} ({score:.2f})")
 
-    # Show context
+    # Show context with syntax highlighting
     if context > 0 and content:
         lines = content.splitlines()
         context_lines = lines[:context]
-        for i, line in enumerate(context_lines):
-            line_num = start_line + i
-            if use_color:
-                console.print(f"  [green]{line_num:4d}[/] │ {line}")
+        context_text = "\n".join(context_lines)
+
+        if use_color:
+            from rich.syntax import Syntax
+
+            # Infer language from file extension
+            lexer = _get_lexer_for_file(file)
+            if lexer:
+                syntax = Syntax(
+                    context_text,
+                    lexer,
+                    line_numbers=True,
+                    start_line=start_line,
+                    indent_guides=False,
+                    word_wrap=False,
+                )
+                console.print(syntax)
             else:
+                # Fallback to plain text with line numbers
+                for i, line in enumerate(context_lines):
+                    line_num = start_line + i
+                    console.print(f"  [green]{line_num:4d}[/] │ {line}")
+        else:
+            for i, line in enumerate(context_lines):
+                line_num = start_line + i
                 print(f"  {line_num:4d} │ {line}")
+
         if len(lines) > context:
             remaining = len(lines) - context
             if use_color:
-                console.print(f"  [dim]     │ ... ({remaining} more lines)[/]")
+                console.print(f"  [dim]... ({remaining} more lines)[/]")
             else:
-                print(f"       │ ... ({remaining} more lines)")
+                print(f"       ... ({remaining} more lines)")
         print()
 
 
