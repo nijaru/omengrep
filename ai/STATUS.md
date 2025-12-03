@@ -22,6 +22,7 @@ Phase 8 hardening complete. Ready for distribution (hgrep-4n4).
 - `hygrep info` command for installation verification
 - Mojo tree-sitter support added
 - Branding: "Hyper + Hybrid grep"
+- Added C, C++, Java, Ruby, C# language support (11 languages total)
 
 ### Phase 7: CLI Polish (2025-12-02)
 - Color output with --color flag

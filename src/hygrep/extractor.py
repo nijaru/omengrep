@@ -6,6 +6,11 @@ import tree_sitter_javascript
 import tree_sitter_typescript
 import tree_sitter_rust
 import tree_sitter_go
+import tree_sitter_c
+import tree_sitter_cpp
+import tree_sitter_java
+import tree_sitter_ruby
+import tree_sitter_c_sharp
 import tree_sitter_mojo
 from tree_sitter import Language, Parser, Query, QueryCursor
 
@@ -18,6 +23,16 @@ LANGUAGE_CAPSULES = {
     ".tsx": tree_sitter_typescript.language_tsx(),
     ".rs": tree_sitter_rust.language(),
     ".go": tree_sitter_go.language(),
+    ".c": tree_sitter_c.language(),
+    ".h": tree_sitter_c.language(),
+    ".cpp": tree_sitter_cpp.language(),
+    ".cc": tree_sitter_cpp.language(),
+    ".cxx": tree_sitter_cpp.language(),
+    ".hpp": tree_sitter_cpp.language(),
+    ".hh": tree_sitter_cpp.language(),
+    ".java": tree_sitter_java.language(),
+    ".rb": tree_sitter_ruby.language(),
+    ".cs": tree_sitter_c_sharp.language(),
     ".mojo": tree_sitter_mojo.language(),
     ".🔥": tree_sitter_mojo.language(),  # Mojo's emoji extension
 }
@@ -52,6 +67,35 @@ QUERIES = {
         (function_definition) @function
         (class_definition) @class
     """,
+    "c": """
+        (function_definition) @function
+        (struct_specifier) @class
+        (enum_specifier) @class
+    """,
+    "cpp": """
+        (function_definition) @function
+        (class_specifier) @class
+        (struct_specifier) @class
+    """,
+    "java": """
+        (method_declaration) @function
+        (constructor_declaration) @function
+        (class_declaration) @class
+        (interface_declaration) @class
+    """,
+    "ruby": """
+        (method) @function
+        (singleton_method) @function
+        (class) @class
+        (module) @class
+    """,
+    "csharp": """
+        (method_declaration) @function
+        (constructor_declaration) @function
+        (class_declaration) @class
+        (interface_declaration) @class
+        (struct_declaration) @class
+    """,
 }
 
 class ContextExtractor:
@@ -83,6 +127,11 @@ class ContextExtractor:
         if ext in [".ts", ".tsx"]: return "typescript"
         if ext == ".rs": return "rust"
         if ext == ".go": return "go"
+        if ext in [".c", ".h"]: return "c"
+        if ext in [".cpp", ".cc", ".cxx", ".hpp", ".hh"]: return "cpp"
+        if ext == ".java": return "java"
+        if ext == ".rb": return "ruby"
+        if ext == ".cs": return "csharp"
         if ext in [".mojo", ".🔥"]: return "mojo"
         return None
 

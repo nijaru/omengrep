@@ -52,7 +52,7 @@ hatch_build.py          # Platform wheel hook
 | Mojo | 25.7.* | Via MAX package |
 | Python | >=3.11, <3.14 | CLI + inference |
 | ONNX Runtime | >=1.16 | Model execution |
-| Tree-sitter | >=0.24 | AST parsing (6 languages) |
+| Tree-sitter | >=0.24 | AST parsing (11 languages) |
 | Model | mxbai-rerank-xsmall-v1 | INT8 quantized, ~40MB |
 
 ## Mojo Patterns

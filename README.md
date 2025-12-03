@@ -8,7 +8,7 @@
 
 ## Features
 
-- **Smart Context:** Extracts full functions/classes (Python, JS, TS, Go, Rust, Mojo)
+- **Smart Context:** Extracts full functions/classes (Python, JS, TS, Go, Rust, C, C++, Java, Ruby, C#, Mojo)
 - **Semantic Reranking:** "auth" matches "login"
 - **Agent Ready:** JSON output with `--json`
 - **Fast:** Parallel Mojo scanner, ~20k files/sec
@@ -146,7 +146,7 @@ Query → [Mojo Scanner] → candidates → [ONNX Reranker] → results
 | Component | Implementation |
 |-----------|----------------|
 | Scanner | Mojo Python extension (`_scanner.so`) |
-| Extraction | Tree-sitter (Python, JS, TS, Go, Rust, Mojo) |
+| Extraction | Tree-sitter (11 languages) |
 | Reranking | ONNX Runtime (`mxbai-rerank-xsmall-v1`) + GPU auto-detect |
 
 ## Development
