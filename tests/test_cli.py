@@ -172,7 +172,7 @@ def test_model_command():
     import io
     from contextlib import redirect_stdout
 
-    sys.argv = ["hygrep", "model"]
+    sys.argv = ["hygrep", "model", "status"]
     stdout = io.StringIO()
     with redirect_stdout(stdout):
         try:
@@ -182,7 +182,7 @@ def test_model_command():
             assert e.code in (0, 1), f"Expected exit 0 or 1, got {e.code}"
 
     out = stdout.getvalue()
-    assert "mixedbread-ai" in out or "Model:" in out
+    assert "mixedbread-ai" in out or "Repository" in out
 
     print("Model command: PASS")
 
