@@ -283,6 +283,10 @@ def main():
         "--hidden", action="store_true",
         help="Include hidden files and directories"
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Force re-download model (for 'hygrep model install')"
+    )
 
     args = parser.parse_args()
 
@@ -336,11 +340,10 @@ def main():
     # Handle 'hygrep model [action]' command
     if args.query == "model":
         action = args.path if args.path != "." else None
-        force = "--force" in sys.argv
 
         if action == "install":
             try:
-                download_model(force=force, quiet=False)
+                download_model(force=args.force, quiet=False)
                 sys.exit(EXIT_MATCH)
             except Exception as e:
                 print(f"Error: {e}", file=sys.stderr)
