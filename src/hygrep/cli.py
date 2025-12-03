@@ -11,6 +11,8 @@ from typing import Annotated, Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import BarColumn, Progress, TextColumn
+from rich.syntax import Syntax
 from rich.table import Table
 
 try:
@@ -37,6 +39,51 @@ err_console = Console(stderr=True)
 
 # Config file location
 CONFIG_PATH = Path.home() / ".config" / "hygrep" / "config.toml"
+
+# File extension to Pygments lexer mapping for syntax highlighting
+EXT_TO_LEXER: dict[str, str] = {
+    ".py": "python",
+    ".pyi": "python",
+    ".js": "javascript",
+    ".jsx": "jsx",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".rs": "rust",
+    ".go": "go",
+    ".java": "java",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".hpp": "cpp",
+    ".hh": "cpp",
+    ".cs": "csharp",
+    ".rb": "ruby",
+    ".php": "php",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "zsh",
+    ".fish": "fish",
+    ".md": "markdown",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".toml": "toml",
+    ".html": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".sql": "sql",
+    ".lua": "lua",
+    ".vim": "vim",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".scala": "scala",
+    ".r": "r",
+    ".R": "r",
+    ".mojo": "python",  # Closest approximation
+    ".🔥": "python",
+}
 
 
 def load_config() -> dict:
@@ -340,8 +387,6 @@ def search(
             )
         results = results[:n]
     else:
-        from rich.progress import BarColumn, Progress, TextColumn
-
         from .reranker import Reranker
 
         reranker = Reranker()
@@ -541,54 +586,11 @@ def _load_gitignore(root: Path) -> pathspec.PathSpec | None:
 
 def _get_lexer_for_file(filepath: str) -> str | None:
     """Get Pygments lexer name for a file based on extension."""
-    ext_map = {
-        ".py": "python",
-        ".pyi": "python",
-        ".js": "javascript",
-        ".jsx": "jsx",
-        ".ts": "typescript",
-        ".tsx": "tsx",
-        ".rs": "rust",
-        ".go": "go",
-        ".java": "java",
-        ".c": "c",
-        ".h": "c",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".hpp": "cpp",
-        ".hh": "cpp",
-        ".cs": "csharp",
-        ".rb": "ruby",
-        ".php": "php",
-        ".sh": "bash",
-        ".bash": "bash",
-        ".zsh": "zsh",
-        ".fish": "fish",
-        ".md": "markdown",
-        ".json": "json",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".toml": "toml",
-        ".html": "html",
-        ".css": "css",
-        ".scss": "scss",
-        ".sql": "sql",
-        ".lua": "lua",
-        ".vim": "vim",
-        ".swift": "swift",
-        ".kt": "kotlin",
-        ".scala": "scala",
-        ".r": "r",
-        ".R": "r",
-        ".mojo": "python",  # Closest approximation
-        ".🔥": "python",
-    }
     ext = Path(filepath).suffix.lower()
-    # Handle emoji extension
+    # pathlib.suffix returns empty string for multi-byte emoji extensions like .🔥
     if not ext and filepath.endswith(".🔥"):
         ext = ".🔥"
-    return ext_map.get(ext)
+    return EXT_TO_LEXER.get(ext)
 
 
 def _print_result(item: dict, fast: bool, use_color: bool, context: int):
@@ -622,8 +624,6 @@ def _print_result(item: dict, fast: bool, use_color: bool, context: int):
         context_text = "\n".join(context_lines)
 
         if use_color:
-            from rich.syntax import Syntax
-
             # Infer language from file extension
             lexer = _get_lexer_for_file(file)
             if lexer:

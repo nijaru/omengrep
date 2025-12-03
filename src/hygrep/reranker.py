@@ -2,6 +2,7 @@
 
 import os
 import sys
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -275,7 +276,7 @@ class Reranker:
         file_contents: dict,
         top_k: int = 10,
         max_candidates: int = 100,
-        progress_callback=None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> list:
         """
         Full pipeline: Extract -> Rerank.
