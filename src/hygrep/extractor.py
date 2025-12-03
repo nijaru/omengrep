@@ -2,30 +2,31 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
+import tree_sitter_bash
 import tree_sitter_c
 import tree_sitter_c_sharp
 import tree_sitter_cpp
+import tree_sitter_elixir
 import tree_sitter_go
 import tree_sitter_java
 import tree_sitter_javascript
+import tree_sitter_json
+import tree_sitter_kotlin
+import tree_sitter_lua
+import tree_sitter_php
 import tree_sitter_python
 import tree_sitter_ruby
 import tree_sitter_rust
-import tree_sitter_typescript
-import tree_sitter_bash
-import tree_sitter_php
-import tree_sitter_kotlin
-import tree_sitter_lua
-import tree_sitter_swift
-import tree_sitter_elixir
-import tree_sitter_zig
 import tree_sitter_svelte
-import tree_sitter_yaml
+import tree_sitter_swift
 import tree_sitter_toml
-import tree_sitter_json
+import tree_sitter_typescript
+import tree_sitter_yaml
+import tree_sitter_zig
 
 try:
     import tree_sitter_mojo
+
     HAS_MOJO = True
 except ImportError:
     HAS_MOJO = False
@@ -169,6 +170,7 @@ QUERIES = {
     """,
 }
 
+
 class ContextExtractor:
     def __init__(self):
         self.parsers = {}
@@ -247,13 +249,15 @@ class ContextExtractor:
                     start = max(0, i - 5)
                     end = min(len(lines), i + 6)
                     window = "\n".join(lines[start:end])
-                    matches.append({
-                        "type": "text",
-                        "name": f"match at line {i+1}",
-                        "start_line": start,
-                        "end_line": end,
-                        "content": window
-                    })
+                    matches.append(
+                        {
+                            "type": "text",
+                            "name": f"match at line {i + 1}",
+                            "start_line": start,
+                            "end_line": end,
+                            "content": window,
+                        }
+                    )
                     if len(matches) >= 5:
                         break
         except Exception:
@@ -265,13 +269,15 @@ class ContextExtractor:
 
         # Return Head (First 50 lines)
         end_head = min(len(lines), 50)
-        return [{
-            "type": "file",
-            "name": os.path.basename(file_path),
-            "start_line": 0,
-            "end_line": end_head,
-            "content": "\n".join(lines[:end_head])
-        }]
+        return [
+            {
+                "type": "file",
+                "name": os.path.basename(file_path),
+                "start_line": 0,
+                "end_line": end_head,
+                "content": "\n".join(lines[:end_head]),
+            }
+        ]
 
     def extract(
         self, file_path: str, query: str, content: Optional[str] = None
@@ -325,7 +331,7 @@ class ContextExtractor:
             if isinstance(item, tuple):
                 node = item[0]
                 tag = item[1]
-            elif hasattr(item, 'type'):
+            elif hasattr(item, "type"):
                 node = item
                 tag = "match"
             else:
@@ -338,7 +344,10 @@ class ContextExtractor:
 
             name = "anonymous"
             name_types = (
-                "identifier", "name", "field_identifier", "type_identifier",
+                "identifier",
+                "name",
+                "field_identifier",
+                "type_identifier",
                 "constant",  # Ruby
                 "simple_identifier",  # Swift
                 "word",  # Bash
@@ -358,15 +367,17 @@ class ContextExtractor:
                     if name != "anonymous":
                         break
 
-            blocks.append({
-                "type": tag,
-                "name": name,
-                "start_line": node.start_point[0],
-                "end_line": node.end_point[0],
-                "content": content[node.start_byte:node.end_byte]
-            })
+            blocks.append(
+                {
+                    "type": tag,
+                    "name": name,
+                    "start_line": node.start_point[0],
+                    "end_line": node.end_point[0],
+                    "content": content[node.start_byte : node.end_byte],
+                }
+            )
 
         if not blocks:
-             return self._fallback_sliding_window(file_path, content, query)
+            return self._fallback_sliding_window(file_path, content, query)
 
         return blocks

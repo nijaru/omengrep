@@ -4,31 +4,32 @@ Verifies tree-sitter parsing and query extraction work for each language.
 """
 
 import sys
+
 sys.path.insert(0, "src")
 
 from hygrep.extractor import ContextExtractor
 
 SAMPLES = {
-    ".py": ('def hello(): pass\nclass Foo: pass', ["hello", "Foo"]),
-    ".js": ('function hello() {}\nclass Foo {}', ["hello", "Foo"]),
-    ".ts": ('function hello(): void {}\nclass Foo {}', ["hello", "Foo"]),
-    ".tsx": ('function Hello(): JSX.Element { return <div/> }', ["Hello"]),
-    ".rs": ('fn hello() {}\nstruct Foo {}', ["hello", "Foo"]),
-    ".go": ('func hello() {}\ntype Foo struct {}', ["hello", "Foo"]),
-    ".c": ('void hello() {}\nstruct Foo {};', ["hello", "Foo"]),
-    ".cpp": ('void hello() {}\nclass Foo {};', ["hello", "Foo"]),
-    ".java": ('class Foo { void hello() {} }', ["hello", "Foo"]),
-    ".rb": ('def hello; end\nclass Foo; end', ["hello", "Foo"]),
-    ".cs": ('class Foo { void Hello() {} }', ["Hello", "Foo"]),
-    ".sh": ('hello() { echo hi; }', ["hello"]),
-    ".php": ('<?php function hello() {} class Foo {}', ["hello", "Foo"]),
-    ".kt": ('fun hello() {}\nclass Foo {}', ["hello", "Foo"]),
-    ".lua": ('function hello() end', ["hello"]),
-    ".swift": ('func hello() {}\nclass Foo {}', ["hello", "Foo"]),
-    ".ex": ('def hello do end', []),  # Elixir uses (call), names hard to extract
-    ".zig": ('fn hello() void {}', ["hello"]),
-    ".svelte": ('<script>let x = 1;</script>', []),  # Script element, no name
-    ".yaml": ('database:\n  host: localhost', []),  # Pairs, no named functions
+    ".py": ("def hello(): pass\nclass Foo: pass", ["hello", "Foo"]),
+    ".js": ("function hello() {}\nclass Foo {}", ["hello", "Foo"]),
+    ".ts": ("function hello(): void {}\nclass Foo {}", ["hello", "Foo"]),
+    ".tsx": ("function Hello(): JSX.Element { return <div/> }", ["Hello"]),
+    ".rs": ("fn hello() {}\nstruct Foo {}", ["hello", "Foo"]),
+    ".go": ("func hello() {}\ntype Foo struct {}", ["hello", "Foo"]),
+    ".c": ("void hello() {}\nstruct Foo {};", ["hello", "Foo"]),
+    ".cpp": ("void hello() {}\nclass Foo {};", ["hello", "Foo"]),
+    ".java": ("class Foo { void hello() {} }", ["hello", "Foo"]),
+    ".rb": ("def hello; end\nclass Foo; end", ["hello", "Foo"]),
+    ".cs": ("class Foo { void Hello() {} }", ["Hello", "Foo"]),
+    ".sh": ("hello() { echo hi; }", ["hello"]),
+    ".php": ("<?php function hello() {} class Foo {}", ["hello", "Foo"]),
+    ".kt": ("fun hello() {}\nclass Foo {}", ["hello", "Foo"]),
+    ".lua": ("function hello() end", ["hello"]),
+    ".swift": ("func hello() {}\nclass Foo {}", ["hello", "Foo"]),
+    ".ex": ("def hello do end", []),  # Elixir uses (call), names hard to extract
+    ".zig": ("fn hello() void {}", ["hello"]),
+    ".svelte": ("<script>let x = 1;</script>", []),  # Script element, no name
+    ".yaml": ("database:\n  host: localhost", []),  # Pairs, no named functions
     ".toml": ('[database]\nhost = "localhost"', []),  # Tables/pairs
     ".json": ('{"name": "test"}', []),  # Pairs, no named functions
 }
@@ -53,13 +54,13 @@ def test_all_languages_parse():
             for name in expected_names:
                 assert name in found_names, f"{ext}: missing '{name}', got {found_names}"
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Language extraction summary:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for ext, blocks in sorted(results.items()):
         names = [b.get("name", "?") for b in blocks[:3]]
         print(f"  {ext:8} → {len(blocks)} blocks: {names}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Total: {len(results)} languages tested")
 
 
@@ -78,7 +79,7 @@ class ShoppingCart:
     def __init__(self):
         self.items = []
 ''',
-        ".rs": '''
+        ".rs": """
 fn process_data(input: &str) -> Result<Data, Error> {
     let parsed = parse(input)?;
     Ok(transform(parsed))
@@ -87,8 +88,8 @@ fn process_data(input: &str) -> Result<Data, Error> {
 struct DataProcessor {
     cache: HashMap<String, Data>,
 }
-''',
-        ".go": '''
+""",
+        ".go": """
 func HandleRequest(w http.ResponseWriter, r *http.Request) {
     data := parseRequest(r)
     respond(w, data)
@@ -98,7 +99,7 @@ type Server struct {
     addr string
     port int
 }
-''',
+""",
     }
 
     for ext, code in samples.items():

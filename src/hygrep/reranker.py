@@ -230,9 +230,9 @@ def get_execution_providers() -> list:
     # Note: CoreML skipped - causes "Context leak" spam on macOS and
     # CPU is fast enough for this model size (~2s/100 candidates)
     preferred = [
-        'CUDAExecutionProvider',      # NVIDIA GPU (Linux/Windows)
-        'DmlExecutionProvider',       # DirectML (Windows)
-        'CPUExecutionProvider',       # Fallback (fast enough for small model)
+        "CUDAExecutionProvider",  # NVIDIA GPU (Linux/Windows)
+        "DmlExecutionProvider",  # DirectML (Windows)
+        "CPUExecutionProvider",  # Fallback (fast enough for small model)
     ]
 
     providers = []
@@ -240,7 +240,7 @@ def get_execution_providers() -> list:
         if p in available:
             providers.append(p)
 
-    return providers if providers else ['CPUExecutionProvider']
+    return providers if providers else ["CPUExecutionProvider"]
 
 
 class Reranker:
@@ -265,9 +265,7 @@ class Reranker:
         # Auto-detect GPU providers with fallback
         providers = get_execution_providers()
         try:
-            self.session = ort.InferenceSession(
-                model_path, sess_options, providers=providers
-            )
+            self.session = ort.InferenceSession(model_path, sess_options, providers=providers)
         except Exception:
             # GPU provider failed, fall back to CPU silently
             self.session = ort.InferenceSession(
@@ -295,10 +293,7 @@ class Reranker:
         # 1. Extraction Phase - parallel tree-sitter parsing
         def extract_file(item: tuple) -> list:
             path, content = item
-            return [
-                (path, block)
-                for block in self.extractor.extract(path, query, content=content)
-            ]
+            return [(path, block) for block in self.extractor.extract(path, query, content=content)]
 
         items = list(file_contents.items())
         with ThreadPoolExecutor(max_workers=min(4, len(items))) as executor:
@@ -308,14 +303,16 @@ class Reranker:
         for file_blocks in all_blocks:
             for path, block in file_blocks:
                 text_to_score = f"{block['type']} {block['name']}: {block['content']}"
-                candidates.append({
-                    "file": path,
-                    "type": block["type"],
-                    "name": block["name"],
-                    "start_line": block["start_line"],
-                    "content": block["content"],
-                    "score_text": text_to_score,
-                })
+                candidates.append(
+                    {
+                        "file": path,
+                        "type": block["type"],
+                        "name": block["name"],
+                        "start_line": block["start_line"],
+                        "content": block["content"],
+                        "score_text": text_to_score,
+                    }
+                )
 
         if not candidates:
             return []
@@ -339,18 +336,14 @@ class Reranker:
             encodings = self.tokenizer.encode_batch(pairs)
 
             input_ids = np.array([e.ids for e in encodings], dtype=np.int64)
-            attention_mask = np.array(
-                [e.attention_mask for e in encodings], dtype=np.int64
-            )
+            attention_mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
 
             inputs = {
                 input_names[0]: input_ids,
                 input_names[1]: attention_mask,
             }
             if use_token_type_ids:
-                token_type_ids = np.array(
-                    [e.type_ids for e in encodings], dtype=np.int64
-                )
+                token_type_ids = np.array([e.type_ids for e in encodings], dtype=np.int64)
                 inputs[input_names[2]] = token_type_ids
 
             res = self.session.run(None, inputs)

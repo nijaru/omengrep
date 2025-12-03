@@ -1,6 +1,8 @@
 """Test extractor module."""
-import sys
+
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 
 from hygrep.extractor import ContextExtractor
@@ -11,14 +13,7 @@ def test_extraction():
 
     # Create dummy file
     dummy_path = "tests/dummy.py"
-    code = (
-        "def hello():\n"
-        "    print('Hello')\n"
-        "\n"
-        "class World:\n"
-        "    def greet(self):\n"
-        "        pass\n"
-    )
+    code = "def hello():\n    print('Hello')\n\nclass World:\n    def greet(self):\n        pass\n"
 
     with open(dummy_path, "w") as f:
         f.write(code)

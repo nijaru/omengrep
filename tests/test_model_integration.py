@@ -4,15 +4,16 @@ These tests hit the network and modify the cache.
 Run manually: python tests/test_model_integration.py
 Not included in default test suite.
 """
+
 import io
 import os
 import sys
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 
 sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 
 from hygrep import cli
-from hygrep.reranker import get_model_info, clean_model_cache
+from hygrep.reranker import clean_model_cache, get_model_info
 
 
 def test_model_clean_and_install():
@@ -77,6 +78,7 @@ def test_model_clean_and_install():
     # 7. Test search works
     print("7. Testing search with fresh model...")
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         test_file = os.path.join(tmpdir, "auth.py")
         with open(test_file, "w") as f:
@@ -92,6 +94,7 @@ def test_model_clean_and_install():
                 pass
 
         import json
+
         results = json.loads(stdout.getvalue())
         assert len(results) >= 1, f"Expected results, got: {results}"
         print(f"   Search returned {len(results)} result(s)")

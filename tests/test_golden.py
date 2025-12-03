@@ -6,8 +6,9 @@ and verify expected results appear in the output.
 Run: pixi run pytest tests/test_golden.py -v
 Or:  python tests/test_golden.py
 """
-import json
+
 import io
+import json
 import os
 import sys
 from contextlib import redirect_stdout
@@ -61,6 +62,7 @@ def get_result_names(results: list[dict]) -> list[str]:
 # Fast Mode Tests (scanner + extractor only, no model)
 # =============================================================================
 
+
 class TestFastMode:
     """Tests that run without the model (--fast flag)."""
 
@@ -68,50 +70,59 @@ class TestFastMode:
         """Search for Python functions."""
         results = run_search("password hashing", fast=True)
         assert len(results) > 0, "Should find results"
-        assert result_contains(results, "auth.py"), f"Should find auth.py: {get_result_names(results)}"
+        assert result_contains(results, "auth.py"), (
+            f"Should find auth.py: {get_result_names(results)}"
+        )
 
     def test_python_class_search(self):
         """Search for Python classes."""
         # Use specific class name to avoid file ordering issues
         results = run_search("UserManager", fast=True)
-        assert result_contains(results, "auth.py", "UserManager"), \
+        assert result_contains(results, "auth.py", "UserManager"), (
             f"Should find UserManager: {get_result_names(results)}"
+        )
 
     def test_typescript_function_search(self):
         """Search for TypeScript functions."""
         results = run_search("createUser", fast=True)
-        assert result_contains(results, "api_handlers.ts", "createUser"), \
+        assert result_contains(results, "api_handlers.ts", "createUser"), (
             f"Should find createUser: {get_result_names(results)}"
+        )
 
     def test_typescript_middleware_search(self):
         """Search for middleware pattern."""
         results = run_search("authMiddleware", fast=True)
-        assert result_contains(results, "api_handlers.ts", "authMiddleware"), \
+        assert result_contains(results, "api_handlers.ts", "authMiddleware"), (
             f"Should find authMiddleware: {get_result_names(results)}"
+        )
 
     def test_go_struct_search(self):
         """Search for Go structs."""
         results = run_search("server configuration", fast=True)
-        assert result_contains(results, "server.go"), \
+        assert result_contains(results, "server.go"), (
             f"Should find server.go: {get_result_names(results)}"
+        )
 
     def test_go_handler_search(self):
         """Search for Go HTTP handlers."""
         results = run_search("healthHandler", fast=True)
-        assert result_contains(results, "server.go", "healthHandler"), \
+        assert result_contains(results, "server.go", "healthHandler"), (
             f"Should find healthHandler: {get_result_names(results)}"
+        )
 
     def test_rust_error_types(self):
         """Search for Rust error handling."""
         results = run_search("DatabaseError", fast=True)
-        assert result_contains(results, "errors.rs"), \
+        assert result_contains(results, "errors.rs"), (
             f"Should find errors.rs: {get_result_names(results)}"
+        )
 
     def test_rust_result_extension(self):
         """Search for Rust trait implementations."""
         results = run_search("ResultExt", fast=True)
-        assert result_contains(results, "errors.rs", "ResultExt"), \
+        assert result_contains(results, "errors.rs", "ResultExt"), (
             f"Should find ResultExt: {get_result_names(results)}"
+        )
 
     def test_cross_language_auth(self):
         """Search should find auth in multiple languages."""
@@ -131,6 +142,7 @@ class TestFastMode:
 # Reranking Tests (full pipeline with model)
 # =============================================================================
 
+
 class TestReranking:
     """Tests that use the model for reranking."""
 
@@ -140,27 +152,31 @@ class TestReranking:
         assert len(results) > 0, "Should find results"
         # hash_password should rank highly for this query
         top_names = [r.get("name") for r in results[:5]]
-        assert "hash_password" in top_names or result_contains(results[:5], "auth.py"), \
+        assert "hash_password" in top_names or result_contains(results[:5], "auth.py"), (
             f"hash_password should be in top 5: {top_names}"
+        )
 
     def test_semantic_graceful_shutdown(self):
         """Semantic search for graceful shutdown."""
         results = run_search("graceful server shutdown")
         # Should find server.go (Shutdown method or related code)
-        assert result_contains(results[:5], "server.go"), \
+        assert result_contains(results[:5], "server.go"), (
             f"server.go should be in top 5: {get_result_names(results[:5])}"
+        )
 
     def test_semantic_error_handling(self):
         """Semantic search for error handling patterns."""
         results = run_search("custom error types with context")
-        assert result_contains(results[:5], "errors.rs"), \
+        assert result_contains(results[:5], "errors.rs"), (
             f"errors.rs should be in top 5: {get_result_names(results[:5])}"
+        )
 
     def test_semantic_crud_operations(self):
         """Semantic search for CRUD operations."""
         results = run_search("REST API CRUD handlers")
-        assert result_contains(results[:5], "api_handlers.ts"), \
+        assert result_contains(results[:5], "api_handlers.ts"), (
             f"api_handlers.ts should be in top 5: {get_result_names(results[:5])}"
+        )
 
     def test_ranking_improves_results(self):
         """Reranking should improve result quality."""
@@ -181,13 +197,13 @@ class TestReranking:
         results = run_search("HTTP server routing")
         if len(results) > 1:
             scores = [r["score"] for r in results]
-            assert scores == sorted(scores, reverse=True), \
-                f"Scores should be descending: {scores}"
+            assert scores == sorted(scores, reverse=True), f"Scores should be descending: {scores}"
 
 
 # =============================================================================
 # Edge Cases
 # =============================================================================
+
 
 class TestEdgeCases:
     """Edge case and boundary tests."""
@@ -223,13 +239,15 @@ class TestEdgeCases:
         results_lower = run_search("usermanager", fast=True)
         results_mixed = run_search("UserManager", fast=True)
         # Both should find results (regex is case insensitive)
-        assert len(results_lower) > 0 or len(results_mixed) > 0, \
+        assert len(results_lower) > 0 or len(results_mixed) > 0, (
             "Should find results regardless of case"
+        )
 
 
 # =============================================================================
 # Run all tests
 # =============================================================================
+
 
 def run_tests():
     """Run all tests and report results."""
@@ -263,7 +281,7 @@ def run_tests():
                 failed += 1
                 errors.append((name, str(e)))
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Results: {passed} passed, {failed} failed")
 
     if errors:

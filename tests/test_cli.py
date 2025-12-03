@@ -1,4 +1,5 @@
 """Test CLI module."""
+
 import json
 import os
 import sys

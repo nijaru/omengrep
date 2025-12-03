@@ -37,6 +37,7 @@ def load_config() -> dict:
     except Exception:
         return {}
 
+
 # Exit codes (grep convention)
 EXIT_MATCH = 0
 EXIT_NO_MATCH = 1
@@ -74,10 +75,8 @@ def show_info():
     # Check tree-sitter languages
     try:
         from .extractor import LANGUAGE_CAPSULES
-        langs = [
-            ext.lstrip(".") for ext in LANGUAGE_CAPSULES.keys()
-            if not ext.startswith(".🔥")
-        ]
+
+        langs = [ext.lstrip(".") for ext in LANGUAGE_CAPSULES.keys() if not ext.startswith(".🔥")]
         print(f"Languages: {', '.join(langs)}")
     except ImportError:
         print("Languages: Error loading tree-sitter")
@@ -146,7 +145,7 @@ def is_regex_pattern(query: str) -> bool:
     return any(c in query for c in "*()[]\\|+?^$")
 
 
-BASH_COMPLETION = '''
+BASH_COMPLETION = """
 _hygrep() {
     local cur prev opts cmds
     COMPREPLY=()
@@ -192,9 +191,9 @@ _hygrep() {
     COMPREPLY=( $(compgen -d -- ${cur}) )
 }
 complete -F _hygrep hygrep
-'''
+"""
 
-ZSH_COMPLETION = '''
+ZSH_COMPLETION = """
 #compdef hygrep
 
 _hygrep() {
@@ -242,9 +241,9 @@ _hygrep() {
 }
 
 _hygrep "$@"
-'''
+"""
 
-FISH_COMPLETION = '''
+FISH_COMPLETION = """
 # Commands
 complete -c hygrep -n "__fish_use_subcommand" -a "info" -d "Show installation status"
 complete -c hygrep -n "__fish_use_subcommand" -a "model" -d "Manage model"
@@ -270,7 +269,7 @@ complete -c hygrep -l min-score -d "Filter results below score"
 complete -c hygrep -l exclude -d "Exclude files matching pattern"
 complete -c hygrep -l hidden -d "Include hidden files and directories"
 complete -c hygrep -l force -d "Force re-download model"
-'''
+"""
 
 
 def main():
@@ -292,40 +291,45 @@ def main():
         "--max-candidates", type=int, default=100, help="Max candidates to rerank (default: 100)"
     )
     parser.add_argument(
-        "--color", choices=["auto", "always", "never"], default="auto",
-        help="Color output (default: auto)"
+        "--color",
+        choices=["auto", "always", "never"],
+        default="auto",
+        help="Color output (default: auto)",
+    )
+    parser.add_argument("--no-ignore", action="store_true", help="Don't respect .gitignore files")
+    parser.add_argument(
+        "-C",
+        "--context",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Show N lines of context from matched content",
+    )
+    parser.add_argument("--stats", action="store_true", help="Show timing statistics")
+    parser.add_argument(
+        "--min-score",
+        type=float,
+        default=0.0,
+        metavar="N",
+        help="Filter results below this score threshold",
     )
     parser.add_argument(
-        "--no-ignore", action="store_true",
-        help="Don't respect .gitignore files"
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help="Exclude files matching glob pattern (can be repeated)",
     )
     parser.add_argument(
-        "-C", "--context", type=int, default=0, metavar="N",
-        help="Show N lines of context from matched content"
+        "--completions",
+        choices=["bash", "zsh", "fish"],
+        help="Output shell completion script and exit",
     )
     parser.add_argument(
-        "--stats", action="store_true",
-        help="Show timing statistics"
+        "--hidden", action="store_true", help="Include hidden files and directories"
     )
     parser.add_argument(
-        "--min-score", type=float, default=0.0, metavar="N",
-        help="Filter results below this score threshold"
-    )
-    parser.add_argument(
-        "--exclude", action="append", default=[], metavar="PATTERN",
-        help="Exclude files matching glob pattern (can be repeated)"
-    )
-    parser.add_argument(
-        "--completions", choices=["bash", "zsh", "fish"],
-        help="Output shell completion script and exit"
-    )
-    parser.add_argument(
-        "--hidden", action="store_true",
-        help="Include hidden files and directories"
-    )
-    parser.add_argument(
-        "--force", action="store_true",
-        help="Force re-download model (for 'hygrep model install')"
+        "--force", action="store_true", help="Force re-download model (for 'hygrep model install')"
     )
 
     args = parser.parse_args()
@@ -465,7 +469,8 @@ def main():
         if gitignore_spec:
             # Scanner returns paths relative to root or with ./ prefix
             file_contents = {
-                k: v for k, v in file_contents.items()
+                k: v
+                for k, v in file_contents.items()
                 if not gitignore_spec.match_file(k.lstrip("./"))
             }
 
@@ -473,8 +478,7 @@ def main():
     if args.exclude:
         exclude_spec = pathspec.PathSpec.from_lines("gitwildmatch", args.exclude)
         file_contents = {
-            k: v for k, v in file_contents.items()
-            if not exclude_spec.match_file(k.lstrip("./"))
+            k: v for k, v in file_contents.items() if not exclude_spec.match_file(k.lstrip("./"))
         }
 
     # Filter by file type if specified
@@ -530,14 +534,16 @@ def main():
         for path, content in list(file_contents.items())[: args.n]:
             blocks = extractor.extract(path, args.query, content=content)
             for block in blocks:
-                results.append({
-                    "file": path,
-                    "type": block["type"],
-                    "name": block["name"],
-                    "start_line": block["start_line"],
-                    "content": block["content"],
-                    "score": 0.0,  # No score in fast mode
-                })
+                results.append(
+                    {
+                        "file": path,
+                        "type": block["type"],
+                        "name": block["name"],
+                        "start_line": block["start_line"],
+                        "content": block["content"],
+                        "score": 0.0,  # No score in fast mode
+                    }
+                )
         results = results[: args.n]
     else:
         if not args.quiet and not args.json:
@@ -593,7 +599,7 @@ def main():
         # Show context if requested
         if args.context > 0 and content:
             lines = content.splitlines()
-            context_lines = lines[:args.context]
+            context_lines = lines[: args.context]
             for i, line in enumerate(context_lines):
                 line_num = start_line + i
                 print(f"  {c.GREEN}{line_num:4d}{c.RESET} | {line}")
@@ -608,8 +614,8 @@ def main():
         print(f"  Filter: {stats['filter_ms']:>5}ms", file=sys.stderr)
         print(f"  Rerank: {stats['rerank_ms']:>5}ms", file=sys.stderr)
         print(f"  Total:  {stats['total_ms']:>5}ms", file=sys.stderr)
-        if not args.fast and 'reranker' in dir():
-            provider = reranker.provider.replace('ExecutionProvider', '')
+        if not args.fast and "reranker" in dir():
+            provider = reranker.provider.replace("ExecutionProvider", "")
             print(f"  Device: {provider}", file=sys.stderr)
 
     sys.exit(EXIT_MATCH)

@@ -5,29 +5,88 @@ import re
 from pathlib import Path
 
 # Directories to always skip
-IGNORED_DIRS = frozenset({
-    "node_modules", "target", "build", "dist", "venv", "env",
-    ".git", ".pixi", ".vscode", ".idea", "__pycache__",
-})
+IGNORED_DIRS = frozenset(
+    {
+        "node_modules",
+        "target",
+        "build",
+        "dist",
+        "venv",
+        "env",
+        ".git",
+        ".pixi",
+        ".vscode",
+        ".idea",
+        "__pycache__",
+    }
+)
 
 # Binary file extensions to skip
-BINARY_EXTENSIONS = frozenset({
-    # Compiled/object files
-    ".pyc", ".pyo", ".o", ".so", ".dylib", ".dll", ".bin", ".exe", ".a", ".lib",
-    # Archives
-    ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar", ".jar", ".war", ".whl",
-    # Documents/media
-    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-    # Images
-    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp", ".bmp", ".tiff",
-    # Audio/video
-    ".mp3", ".mp4", ".wav", ".avi", ".mov", ".mkv",
-    # Data files
-    ".db", ".sqlite", ".sqlite3", ".pickle", ".pkl", ".npy", ".npz",
-    ".onnx", ".pt", ".pth", ".safetensors",
-    # Lock files
-    ".lock",
-})
+BINARY_EXTENSIONS = frozenset(
+    {
+        # Compiled/object files
+        ".pyc",
+        ".pyo",
+        ".o",
+        ".so",
+        ".dylib",
+        ".dll",
+        ".bin",
+        ".exe",
+        ".a",
+        ".lib",
+        # Archives
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".7z",
+        ".rar",
+        ".jar",
+        ".war",
+        ".whl",
+        # Documents/media
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        # Images
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".svg",
+        ".webp",
+        ".bmp",
+        ".tiff",
+        # Audio/video
+        ".mp3",
+        ".mp4",
+        ".wav",
+        ".avi",
+        ".mov",
+        ".mkv",
+        # Data files
+        ".db",
+        ".sqlite",
+        ".sqlite3",
+        ".pickle",
+        ".pkl",
+        ".npy",
+        ".npz",
+        ".onnx",
+        ".pt",
+        ".pth",
+        ".safetensors",
+        # Lock files
+        ".lock",
+    }
+)
 
 MAX_FILE_SIZE = 1_000_000  # 1MB
 
@@ -77,9 +136,9 @@ def scan(root: str, pattern: str, include_hidden: bool = False) -> dict[str, str
 
         # Filter directories in-place
         dirnames[:] = [
-            d for d in dirnames
-            if d not in IGNORED_DIRS
-            and (include_hidden or not d.startswith("."))
+            d
+            for d in dirnames
+            if d not in IGNORED_DIRS and (include_hidden or not d.startswith("."))
         ]
 
         for filename in filenames:

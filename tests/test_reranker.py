@@ -1,6 +1,8 @@
 """Test reranker module."""
-import sys
+
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 
 from hygrep.reranker import Reranker
@@ -16,7 +18,9 @@ def test_reranker():
 
     # Test with dummy content
     file_contents = {
-        "test_auth.py": "def login():\n    # User login logic\n    pass\n\ndef logout():\n    pass\n"
+        "test_auth.py": (
+            "def login():\n    # User login logic\n    pass\n\ndef logout():\n    pass\n"
+        )
     }
 
     print("Running search...")
