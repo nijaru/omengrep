@@ -3,7 +3,7 @@
 | Metric | Value | Updated |
 |--------|-------|---------|
 | Phase | 9 (Released) | 2025-12-03 |
-| Version | 0.0.1 (PyPI), 0.0.2-dev (main) | 2025-12-03 |
+| Version | 0.0.2 (PyPI) | 2025-12-03 |
 | PyPI | https://pypi.org/project/hygrep/ | 2025-12-03 |
 | Perf | ~20k files/sec (Mojo) | 2025-12-02 |
 | Inference | ~2s/100 candidates (CPU) | 2025-12-02 |
@@ -12,11 +12,11 @@
 
 ## Active Work
 
-Main branch has model management improvements not yet on PyPI. Consider 0.0.2 release.
+None. v0.0.2 released.
 
 ## Completed (Recent)
 
-### Model Management (2025-12-03, post-release)
+### v0.0.2 Release (2025-12-03)
 - `hygrep model [install|clean]` commands
 - HuggingFace cache integration (shared `~/.cache/huggingface/`)
 - Offline-first: auto-download on first use, then cached
