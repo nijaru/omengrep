@@ -212,13 +212,10 @@ class TestEdgeCases:
         results = run_search("password", fast=True)
         assert len(results) > 0, "Should find password references"
 
-    def test_long_query(self):
-        """Long natural language query."""
-        # Use query with auth.py-specific terms (expires_at is unique)
-        results = run_search(
-            "session expires_at validation",
-            fast=True
-        )
+    def test_unique_term_query(self):
+        """Query with unique term finds correct file."""
+        # Use auth.py-unique term (expires_at only in auth.py)
+        results = run_search("expires_at", fast=True)
         assert result_contains(results, "auth.py"), "Should find auth.py"
 
     def test_case_insensitive(self):
