@@ -27,3 +27,4 @@ ai/tmp/
 /hygrep
 # Compiled extensions
 *.so
+uv.lock
