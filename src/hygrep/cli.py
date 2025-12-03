@@ -64,7 +64,7 @@ def show_info():
         from ._scanner import scan
         print("Scanner:   OK (Mojo native)")
     except ImportError:
-        print("Scanner:   Not built (run: pixi run build-ext)")
+        print("Scanner:   OK (Python fallback)")
 
     # Check tree-sitter languages
     try:
@@ -350,12 +350,11 @@ def main():
     if " " in args.query and not is_regex_pattern(args.query):
         scanner_query = args.query.replace(" ", "|")
 
-    # 1. Recall phase - Mojo scanner
+    # 1. Recall phase - Try Mojo scanner, fall back to Python
     try:
         from ._scanner import scan
     except ImportError:
-        print("Error: _scanner.so not found. Run: mojo build src/scanner/_scanner.mojo --emit shared-lib -o src/hygrep/_scanner.so", file=sys.stderr)
-        sys.exit(EXIT_ERROR)
+        from .scanner import scan
 
     scan_start = time.perf_counter()
     file_contents = scan(str(root), scanner_query, args.hidden)
