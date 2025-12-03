@@ -40,7 +40,6 @@ None. v0.0.3 released.
 - CI builds 6 wheels: 3.11, 3.12, 3.13 × linux-64, macos-arm64
 
 ### Phase 8: Hardening (2025-12-02)
-- GPU auto-detection with silent fallback
 - Model download validation (size + JSON integrity)
 - Partial download cleanup on failure
 - Tree-sitter deprecation fix (`Query()` constructor)
@@ -55,8 +54,19 @@ None.
 ## Known Issues
 
 - 128-byte regex memory leak (Mojo v25.7 limitation)
-- GPU providers not widely available in conda-forge
 - Mojo native scanner requires MAX/Mojo runtime (wheels use Python fallback)
+
+## GPU Support
+
+**Status:** CPU-only until GPU support is ready.
+
+| Provider | Status |
+|----------|--------|
+| CPU | ✅ Current |
+| CUDA | ❌ Not ready |
+| CoreML | ❌ Not ready |
+
+See `ai/DECISIONS.md` section 8 for details.
 
 ## Next Steps
 

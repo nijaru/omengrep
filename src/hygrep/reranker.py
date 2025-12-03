@@ -223,24 +223,17 @@ def clean_model_cache() -> bool:
 
 
 def get_execution_providers() -> list:
-    """Auto-detect best available execution provider."""
-    available = ort.get_available_providers()
+    """Get execution providers for ONNX Runtime.
 
-    # Prefer GPU providers in order
-    # Note: CoreML skipped - causes "Context leak" spam on macOS and
-    # CPU is fast enough for this model size (~2s/100 candidates)
-    preferred = [
-        'CUDAExecutionProvider',      # NVIDIA GPU (Linux/Windows)
-        'DmlExecutionProvider',       # DirectML (Windows)
-        'CPUExecutionProvider',       # Fallback (fast enough for small model)
-    ]
+    Currently CPU-only. GPU support (CUDA, CoreML, DirectML) requires
+    different onnxruntime packages not yet supported:
+    - onnxruntime-gpu for CUDA
+    - onnxruntime-silicon for CoreML (also has spam issues)
+    - onnxruntime-directml for DirectML
 
-    providers = []
-    for p in preferred:
-        if p in available:
-            providers.append(p)
-
-    return providers if providers else ['CPUExecutionProvider']
+    CPU is fast enough for this model size (~2s/100 candidates).
+    """
+    return ['CPUExecutionProvider']
 
 
 class Reranker:
@@ -262,17 +255,10 @@ class Reranker:
         sess_options.inter_op_num_threads = 1
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-        # Auto-detect GPU providers with fallback
-        providers = get_execution_providers()
-        try:
-            self.session = ort.InferenceSession(
-                model_path, sess_options, providers=providers
-            )
-        except Exception:
-            # GPU provider failed, fall back to CPU silently
-            self.session = ort.InferenceSession(
-                model_path, sess_options, providers=["CPUExecutionProvider"]
-            )
+        # CPU-only for now (GPU requires different onnxruntime packages)
+        self.session = ort.InferenceSession(
+            model_path, sess_options, providers=get_execution_providers()
+        )
         self.provider = self.session.get_providers()[0]
 
     def search(
