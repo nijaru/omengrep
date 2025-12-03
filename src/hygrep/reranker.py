@@ -11,6 +11,9 @@ from tokenizers import Tokenizer
 
 from .extractor import ContextExtractor
 
+# Suppress ONNX Runtime warnings (CoreML capability messages, etc.)
+ort.set_default_logger_severity(3)  # ERROR level only
+
 MODEL_REPO = "mixedbread-ai/mxbai-rerank-xsmall-v1"
 MODEL_FILE = "onnx/model_quantized.onnx"
 TOKENIZER_FILE = "tokenizer.json"
@@ -224,11 +227,12 @@ def get_execution_providers() -> list:
     available = ort.get_available_providers()
 
     # Prefer GPU providers in order
+    # Note: CoreML skipped - causes "Context leak" spam on macOS and
+    # CPU is fast enough for this model size (~2s/100 candidates)
     preferred = [
         'CUDAExecutionProvider',      # NVIDIA GPU (Linux/Windows)
-        'CoreMLExecutionProvider',    # Apple Neural Engine / GPU
         'DmlExecutionProvider',       # DirectML (Windows)
-        'CPUExecutionProvider',       # Fallback
+        'CPUExecutionProvider',       # Fallback (fast enough for small model)
     ]
 
     providers = []
