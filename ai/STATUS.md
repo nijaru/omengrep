@@ -2,15 +2,15 @@
 
 | Metric    | Value                             | Updated    |
 | --------- | --------------------------------- | ---------- |
-| Phase     | 9 (Released)                      | 2025-12-03 |
-| Version   | 0.0.5 (PyPI)                      | 2025-12-03 |
-| PyPI      | https://pypi.org/project/hygrep/  | 2025-12-03 |
+| Phase     | 9 (Released)                      | 2025-12-04 |
+| Version   | 0.0.6 (PyPI)                      | 2025-12-04 |
+| PyPI      | https://pypi.org/project/hygrep/  | 2025-12-04 |
 | CLI       | `hhg` (primary), `hygrep` (alias) | 2025-12-03 |
 | Languages | 22                                | 2025-12-03 |
 | Perf      | ~20k files/sec (Mojo)             | 2025-12-02 |
 | Inference | ~2s/100 candidates (CPU)          | 2025-12-02 |
 | Mojo      | v25.7                             | 2025-12-01 |
-| Wheels    | 6 (py3.11-3.13 × linux/macos)     | 2025-12-03 |
+| Wheels    | 6 (py3.11-3.13 × linux/macos)     | 2025-12-04 |
 
 ## Active Work
 
@@ -18,13 +18,14 @@ None.
 
 ## Completed (Recent)
 
-### v0.0.6 Release (2025-12-03)
+### v0.0.6 Release (2025-12-04)
 
 - Add `end_line` to JSON output for editor integration
 - Add `-l`/`--files-only` option (list unique file paths)
 - Add `--compact` option (JSON without content)
 - Add syntax highlighting for code context (40+ languages)
 - Modernize CLI with Typer + Rich (visible subcommands, examples panel)
+- Fix version in pyproject.toml (was out of sync with **init**.py)
 
 ### v0.0.5 Release (2025-12-03)
 
