@@ -13,27 +13,35 @@
 
 ## Active Work
 
-### Semantic Search v2 Design (experiment/semantic-search branch)
+### v2 MVP Complete (experiment/semantic-search branch)
 
-Reimagining hhg as semantic-first code search:
+Semantic-first code search with auto-index/update:
 
 | Component            | Status  | Notes                            |
 | -------------------- | ------- | -------------------------------- |
+| cli_v2.py            | ✅ Done | Semantic-first CLI               |
+| Auto-index on query  | ✅ Done | Builds index on first search     |
+| Auto-update stale    | ✅ Done | Incremental updates (hash-based) |
+| -e/-r escape hatches | ✅ Done | Exact/regex fallback to grep     |
 | embedder.py          | ✅ Done | ONNX all-MiniLM-L6-v2 (384 dims) |
 | semantic.py          | ✅ Done | SemanticIndex using omendb       |
-| CLI index commands   | ✅ Done | build, status, clear, search     |
-| DESIGN-v2.md         | ✅ Done | New architecture spec            |
-| Auto-index on query  | ❌ TODO | Core v2 feature                  |
-| Auto-update stale    | ❌ TODO | Incremental updates              |
-| -e/-r escape hatches | ❌ TODO | Exact/regex fallback             |
 
-**Key decisions:**
+**Performance:**
 
-- Semantic search is the default (not opt-in)
-- Auto-index on first query (no `index build` command)
-- Auto-update when stale (incremental)
-- `-e` (exact) and `-r` (regex) for escape hatches
-- Drop: --fast, --hybrid, cross-encoder reranking
+| Phase       | Time        | Notes                     |
+| ----------- | ----------- | ------------------------- |
+| First index | ~5-6s       | 8k blocks, batch_size=128 |
+| Cold search | ~5.8s       | Model loading             |
+| Warm search | <1ms        | omendb vector search      |
+| Auto-update | ~100ms/file | Incremental               |
+
+**Key UX:**
+
+- `hhg "query" ./src` - semantic search (default)
+- `hhg -e "pattern" ./src` - exact match (grep)
+- `hhg -r "regex" ./src` - regex match
+- Auto-builds index on first query
+- Auto-updates when files change
 
 See `ai/DESIGN-v2.md` for full design.
 
@@ -69,9 +77,9 @@ None.
 
 ## Next Steps
 
-1. Implement v2 design (auto-index, auto-update, clean UX)
-2. Drop cross-encoder reranking (embeddings sufficient)
-3. Add -e/-r escape hatches for exact/regex search
+1. Test v2 on real codebase, gather feedback
+2. Merge experiment/semantic-search to main
+3. Update entry point to use cli_v2 (or promote hhg v2)
 
 ## Branch Status
 
