@@ -97,6 +97,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.7-h3691f8a_5.conda
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f6/97/6add9e05603c85330b43688e076dcf6b7a8ce066ec5206a65abbf282caba/omendb-0.0.1a3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: git+https://github.com/lsh/tree-sitter-mojo.git#564d5a8489e20e5f723020ae40308888699055c0
@@ -207,6 +208,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hd0aec43_5.conda
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/4e/22/8a4cc2fc4133cc96c29e1fef620b4f1a809f63a06cd056fb35280ca1f3bc/omendb-0.0.1a3-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: git+https://github.com/lsh/tree-sitter-mojo.git#564d5a8489e20e5f723020ae40308888699055c0
@@ -1461,6 +1463,24 @@ packages:
   - pkg:pypi/numpy?source=hash-mapping
   size: 6791770
   timestamp: 1763350918650
+- pypi: https://files.pythonhosted.org/packages/4e/22/8a4cc2fc4133cc96c29e1fef620b4f1a809f63a06cd056fb35280ca1f3bc/omendb-0.0.1a3-cp313-cp313-macosx_11_0_arm64.whl
+  name: omendb
+  version: 0.0.1a3
+  sha256: 727269397d4f31816daabbd253cf93aed40ca01544f17784506d28458c9ddaa5
+  requires_dist:
+  - numpy>=1.24.4
+  - langchain-core>=0.2.0 ; extra == 'langchain'
+  - llama-index-core>=0.10.0 ; extra == 'llamaindex'
+  requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/f6/97/6add9e05603c85330b43688e076dcf6b7a8ce066ec5206a65abbf282caba/omendb-0.0.1a3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  name: omendb
+  version: 0.0.1a3
+  sha256: d0c69154ddd83263ecad9c31e977f4e6775b50e0cfd5121df4cbc57eb6b25271
+  requires_dist:
+  - numpy>=1.24.4
+  - langchain-core>=0.2.0 ; extra == 'langchain'
+  - llama-index-core>=0.10.0 ; extra == 'llamaindex'
+  requires_python: '>=3.9'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/onnxruntime-1.22.0-py313hd753461_0_cpu.conda
   sha256: b6e4fbf7b85bb69043dc78e1f8f04a508f7a5170e0862dbe122c04f859224488
   md5: b2477c3d930b6fbf76e5b42b1ad631fa
