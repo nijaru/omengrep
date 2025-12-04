@@ -309,6 +309,7 @@ class Reranker:
                         "type": block["type"],
                         "name": block["name"],
                         "start_line": block["start_line"],
+                        "end_line": block["end_line"],
                         "content": block["content"],
                         "score_text": text_to_score,
                     },

@@ -108,9 +108,9 @@ EXAMPLES = """
   [cyan]hhg[/] "auth" ./src              Search with neural reranking
   [cyan]hhg[/] "error" ./src --fast      Fast grep (no model, instant)
   [cyan]hhg[/] "TODO" . -t py,rs         Filter by file type
-  [cyan]hhg[/] "api" . --json -n 20      JSON output, 20 results
+  [cyan]hhg[/] "TODO" . -l               List matching files only
+  [cyan]hhg[/] "api" . --json --compact  JSON metadata (no content)
   [cyan]hhg model install[/]             Download the reranking model
-  [cyan]hhg info[/]                      Show installation status
 """
 
 # Create the Typer app
@@ -168,6 +168,8 @@ def search(
     # Output options
     n: Annotated[int, typer.Option("-n", help="Number of results")] = 10,
     json_output: Annotated[bool, typer.Option("--json", help="Output JSON for scripts")] = False,
+    files_only: Annotated[bool, typer.Option("-l", "--files-only", help="Only list files")] = False,
+    compact: Annotated[bool, typer.Option("--compact", help="JSON without content")] = False,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress progress")] = False,
     context: Annotated[int, typer.Option("-C", "--context", help="Lines of context")] = 0,
     color: Annotated[str, typer.Option(help="Color: auto/always/never")] = "auto",
@@ -379,6 +381,7 @@ def search(
                     "type": block["type"],
                     "name": block["name"],
                     "start_line": block["start_line"],
+                    "end_line": block["end_line"],
                     "content": block["content"],
                     "score": 0.0,
                 }
@@ -407,7 +410,19 @@ def search(
         results = [r for r in results if r["score"] >= min_score]
 
     # Output results
+    if files_only:
+        # Unique file paths only
+        seen = set()
+        for r in results:
+            if r["file"] not in seen:
+                print(r["file"])
+                seen.add(r["file"])
+        raise typer.Exit(EXIT_MATCH if results else EXIT_NO_MATCH)
+
     if json_output:
+        if compact:
+            # Strip content for lighter output
+            results = [{k: v for k, v in r.items() if k != "content"} for r in results]
         print(json.dumps(results))
         raise typer.Exit(EXIT_MATCH if results else EXIT_NO_MATCH)
 
