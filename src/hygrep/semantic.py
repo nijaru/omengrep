@@ -65,7 +65,7 @@ class SemanticIndex:
     def index(
         self,
         files: dict[str, str],
-        batch_size: int = 32,
+        batch_size: int = 128,
         on_progress: callable = None,
     ) -> dict:
         """Index code files for semantic search.
