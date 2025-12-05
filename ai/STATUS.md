@@ -2,18 +2,16 @@
 
 | Metric    | Value                             | Updated    |
 | --------- | --------------------------------- | ---------- |
-| Phase     | 10 (Semantic Experiment)          | 2025-12-04 |
+| Phase     | 11 (v2 Semantic on main)          | 2025-12-04 |
 | Version   | 0.0.6 (PyPI)                      | 2025-12-04 |
-| Branch    | experiment/semantic-search        | 2025-12-04 |
+| Branch    | main                              | 2025-12-04 |
 | PyPI      | https://pypi.org/project/hygrep/  | 2025-12-04 |
 | CLI       | `hhg` (primary), `hygrep` (alias) | 2025-12-04 |
 | Languages | 22                                | 2025-12-03 |
 | Perf      | ~20k files/sec (Mojo)             | 2025-12-02 |
 | Inference | ~2s/100 candidates (CPU)          | 2025-12-02 |
 
-## Active Work
-
-### v2 Semantic Search (experiment/semantic-search branch)
+## v2 Semantic Search (now on main)
 
 Semantic-first code search with ModernBERT embeddings:
 
@@ -90,11 +88,10 @@ None.
 
 1. Test v2 on larger codebases, gather feedback
 2. Add `hhg init-ci` command for CI workflow generation
-3. Merge experiment/semantic-search to main
+3. Release v0.0.7 with semantic search
 
 ## Branch Status
 
-| Branch                     | Purpose            | Status |
-| -------------------------- | ------------------ | ------ |
-| main                       | v0.0.6 release     | Stable |
-| experiment/semantic-search | v2 semantic design | Active |
+| Branch | Purpose                  | Status |
+| ------ | ------------------------ | ------ |
+| main   | v2 semantic (unreleased) | Active |
