@@ -39,6 +39,17 @@ def get_index_path(root: Path) -> Path:
     return root.resolve() / INDEX_DIR
 
 
+def find_index(search_path: Path) -> tuple[Path, Path | None]:
+    """Find existing index by walking up directory tree.
+
+    Returns:
+        Tuple of (index_root, existing_index_dir or None).
+    """
+    from .semantic import find_index_root
+
+    return find_index_root(search_path)
+
+
 def index_exists(root: Path) -> bool:
     """Check if index exists for this directory."""
     index_path = get_index_path(root)
@@ -47,58 +58,92 @@ def index_exists(root: Path) -> bool:
 
 def build_index(root: Path, quiet: bool = False) -> None:
     """Build semantic index for directory."""
+    from rich.progress import (
+        BarColumn,
+        Progress,
+        SpinnerColumn,
+        TaskProgressColumn,
+        TextColumn,
+    )
+
     from .scanner import scan
     from .semantic import SemanticIndex
 
     root = root.resolve()
 
-    if not quiet:
-        err_console.print(f"[dim]Scanning {root}...[/]")
-
-    # Scan for files
-    t0 = time.perf_counter()
-    files = scan(str(root), ".", include_hidden=False)
-    scan_time = time.perf_counter() - t0
-
-    if not files:
-        err_console.print("[yellow]No files found to index[/]")
+    if quiet:
+        # Quiet mode: no progress display
+        files = scan(str(root), ".", include_hidden=False)
+        if not files:
+            return
+        index = SemanticIndex(root)
+        index.index(files)
         return
 
-    if not quiet:
+    # Interactive mode: show progress
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=err_console,
+        transient=True,
+    ) as progress:
+        # Phase 1: Scan
+        scan_task = progress.add_task("Scanning files...", total=None)
+        t0 = time.perf_counter()
+        files = scan(str(root), ".", include_hidden=False)
+        scan_time = time.perf_counter() - t0
+        progress.remove_task(scan_task)
+
+        if not files:
+            err_console.print("[yellow]No files found to index[/]")
+            return
+
         err_console.print(f"[dim]Found {len(files)} files ({scan_time:.1f}s)[/]")
-        err_console.print("[dim]Building index...[/]")
 
-    # Build index
-    t0 = time.perf_counter()
-    index = SemanticIndex(root)
+        # Phase 2: Extract and embed
+        index = SemanticIndex(root)
+        embed_task = progress.add_task("Embedding code blocks...", total=100)
 
-    def on_progress(current: int, total: int, msg: str) -> None:
-        if not quiet:
-            err_console.print(f"\r[dim]{msg} ({current}/{total})[/]", end="")
+        def on_progress(current: int, total: int, msg: str) -> None:
+            if total > 0:
+                progress.update(embed_task, completed=current, total=total)
 
-    stats = index.index(files, on_progress=on_progress)
-    index_time = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        stats = index.index(files, on_progress=on_progress)
+        index_time = time.perf_counter() - t0
+        progress.remove_task(embed_task)
 
-    if not quiet:
-        err_console.print()  # Newline after progress
-        err_console.print(
-            f"[green]✓[/] Indexed {stats['blocks']} blocks "
-            f"from {stats['files']} files ({index_time:.1f}s)"
-        )
-        if stats["skipped"]:
-            err_console.print(f"[dim]  Skipped {stats['skipped']} unchanged files[/]")
+    # Summary
+    err_console.print(
+        f"[green]✓[/] Indexed {stats['blocks']} blocks "
+        f"from {stats['files']} files ({index_time:.1f}s)"
+    )
+    if stats["skipped"]:
+        err_console.print(f"[dim]  Skipped {stats['skipped']} unchanged files[/]")
 
 
 def semantic_search(
     query: str,
-    root: Path,
+    search_path: Path,
+    index_root: Path,
     n: int = 10,
     threshold: float = 0.0,
 ) -> list[dict]:
-    """Run semantic search."""
+    """Run semantic search.
+
+    Args:
+        query: Search query.
+        search_path: Directory to search in (may be subdir of index_root).
+        index_root: Root directory where index lives.
+        n: Number of results.
+        threshold: Minimum score filter.
+    """
     from .semantic import SemanticIndex
 
-    index = SemanticIndex(root.resolve())
+    # Pass search_scope if searching a subdirectory
+    index = SemanticIndex(index_root, search_scope=search_path)
     results = index.search(query, k=n)
 
     # Filter by threshold if specified (any non-zero value)
@@ -415,23 +460,32 @@ def main(
         err_console.print("\n[dim]Tip: Use -e for exact match without semantic search[/]")
         raise typer.Exit(EXIT_ERROR)
 
+    # Walk up to find existing index, or determine where to create one
+    index_root, existing_index = find_index(path)
+    search_path = path  # May be a subdir of index_root
+
     # Check if index exists, build if not
-    if not index_exists(path):
+    if existing_index is None:
         if no_index:
             err_console.print("[red]Error:[/] No index found (use without --no-index to build)")
             raise typer.Exit(EXIT_ERROR)
         if not quiet:
             err_console.print("[yellow]No index found. Building...[/]")
+        # Build at search_path (becomes the new index_root)
         build_index(path, quiet=quiet)
+        index_root = path
         if not quiet:
             err_console.print()
     elif not no_index:
-        # Check for stale index and auto-update
+        # Found existing index - check for stale files and auto-update
         from .scanner import scan
         from .semantic import SemanticIndex
 
-        files = scan(str(path), ".", include_hidden=False)
-        index = SemanticIndex(path)
+        if not quiet and index_root != search_path:
+            err_console.print(f"[dim]Using index at {index_root}[/]")
+
+        files = scan(str(index_root), ".", include_hidden=False)
+        index = SemanticIndex(index_root)
         stale_count = index.needs_update(files)
 
         if stale_count > 0:
@@ -446,7 +500,7 @@ def main(
         err_console.print(f"[dim]Searching for: {query}[/]")
 
     t0 = time.perf_counter()
-    results = semantic_search(query, path, n=n, threshold=threshold)
+    results = semantic_search(query, search_path, index_root, n=n, threshold=threshold)
     search_time = time.perf_counter() - t0
 
     if not results:
