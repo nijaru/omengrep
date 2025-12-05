@@ -7,6 +7,9 @@ build/
 # Python
 __pycache__/
 *.pyc
+.venv/
+.ruff_cache/
+dist/
 
 # OS
 .DS_Store
