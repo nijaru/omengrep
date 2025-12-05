@@ -241,7 +241,7 @@ class SemanticIndex:
                 items.append(
                     {
                         "id": block_info["id"],
-                        "embedding": embeddings[j].tolist(),
+                        "vector": embeddings[j].tolist(),
                         "metadata": {
                             "file": block_info["file"],
                             "type": block_info["block"]["type"],
