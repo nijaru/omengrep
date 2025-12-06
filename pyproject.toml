@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hygrep"
 version = "0.0.12"
-description = "Grep + neural reranking for code search"
+description = "Semantic code search with automatic indexing"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11,<3.14"

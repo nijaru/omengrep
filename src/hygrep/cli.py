@@ -496,10 +496,11 @@ def search(
     index_root, existing_index = find_index(path)
     search_path = path  # May be a subdir of index_root
 
-    # Check if index exists
+    # Check if index exists - require explicit build
     if existing_index is None:
-        err_console.print("[yellow]No index found.[/] Run [bold]hhg build[/] to create one.")
-        raise typer.Exit(EXIT_NO_MATCH)
+        err_console.print("[red]Error:[/] No index found. Run 'hhg build' first.")
+        err_console.print("[dim]Tip: Use -f for fast mode (grep + rerank) without an index[/]")
+        raise typer.Exit(EXIT_ERROR)
 
     if not no_index:
         # Found existing index - check for stale files and auto-update

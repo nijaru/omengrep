@@ -59,9 +59,11 @@ jobs:
 
       - name: Run Python tests
         run: pixi run test-py
+        timeout-minutes: 10
 
       - name: Test CLI
         run: |
           pixi run hhg --version
           pixi run hhg status ./src
           pixi run hhg -f -n 3 "def" ./src
+        timeout-minutes: 5

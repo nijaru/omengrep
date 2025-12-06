@@ -1,18 +1,20 @@
 # hygrep (hhg)
 
-**Semantic code search with automatic indexing. Describe what you're looking for, get relevant code.**
+**Semantic code search. Describe what you're looking for, get relevant code.**
 
 How it works:
-1. **Index**: ModernBERT embeddings for code blocks (auto-builds on first search)
-2. **Search**: Vector similarity via omendb
+
+1. **Index**: ModernBERT embeddings for code blocks (requires `hhg build` first)
+2. **Search**: Vector similarity via omendb (auto-updates stale files)
 3. **Fallback**: `-f` for grep + neural rerank, `-e`/`-r` for exact/regex grep
 
 ## Quick Reference
 
 ```bash
 pixi run build-ext            # Build Mojo scanner extension
-pixi run hhg "query" ./src    # Search (semantic, auto-indexes)
-pixi run hhg -f "query" .     # Fast mode (grep + rerank, no index)
+pixi run hhg build ./src      # Build semantic index (required first)
+pixi run hhg "query" ./src    # Semantic search (requires index)
+pixi run hhg -f "query" .     # Fast mode (grep + rerank, no index needed)
 pixi run hhg -e "pattern" .   # Exact grep (fastest)
 pixi run hhg --json "query" . # JSON output for agents
 pixi run test                 # Run all tests
@@ -24,8 +26,8 @@ pixi run test                 # Run all tests
 Default (semantic):
 Query → Embed → Vector search (omendb) → Results
                ↓
-         Auto-indexes on first run (.hhg/)
-         Auto-updates when files change
+         Requires 'hhg build' first (.hhg/)
+         Auto-updates stale files on search
 
 Fast mode (-f):
 Query → [Mojo Scanner] → matching files → [Tree-sitter] → code blocks → [ONNX Reranker] → Results
@@ -34,13 +36,13 @@ Query → [Mojo Scanner] → matching files → [Tree-sitter] → code blocks �
         (parallel, libc)                  & classes from AST          (batched inference)
 ```
 
-| Component | Implementation |
-|-----------|----------------|
-| Scanner | `src/scanner/_scanner.mojo` (Python extension) + `c_regex.mojo` |
-| Extraction | `src/hygrep/extractor.py` (Tree-sitter AST) |
-| Embeddings | `src/hygrep/embedder.py` (ModernBERT ONNX) |
-| Vector DB | `src/hygrep/semantic.py` (omendb wrapper) |
-| Reranking | `src/hygrep/reranker.py` (cross-encoder, for -f mode) |
+| Component  | Implementation                                                  |
+| ---------- | --------------------------------------------------------------- |
+| Scanner    | `src/scanner/_scanner.mojo` (Python extension) + `c_regex.mojo` |
+| Extraction | `src/hygrep/extractor.py` (Tree-sitter AST)                     |
+| Embeddings | `src/hygrep/embedder.py` (ModernBERT ONNX)                      |
+| Vector DB  | `src/hygrep/semantic.py` (omendb wrapper)                       |
+| Reranking  | `src/hygrep/reranker.py` (cross-encoder, for -f mode)           |
 
 ## Project Structure
 
@@ -64,15 +66,15 @@ hatch_build.py          # Platform wheel hook
 
 ## Technology Stack
 
-| Component | Version | Notes |
-|-----------|---------|-------|
-| Mojo | 25.7.* | Via MAX package |
-| Python | >=3.11, <3.14 | CLI + inference |
-| ONNX Runtime | >=1.16 | Model execution |
-| Tree-sitter | >=0.24 | AST parsing (22 languages) |
-| omendb | >=0.0.1a1 | Vector database |
-| Embeddings | ModernBERT-embed-base | INT8, 256 dims, ~40MB |
-| Reranker | mxbai-rerank-xsmall-v1 | INT8, ~40MB (for -f mode) |
+| Component    | Version                | Notes                      |
+| ------------ | ---------------------- | -------------------------- |
+| Mojo         | 25.7.\*                | Via MAX package            |
+| Python       | >=3.11, <3.14          | CLI + inference            |
+| ONNX Runtime | >=1.16                 | Model execution            |
+| Tree-sitter  | >=0.24                 | AST parsing (22 languages) |
+| omendb       | >=0.0.1a1              | Vector database            |
+| Embeddings   | ModernBERT-embed-base  | INT8, 256 dims, ~40MB      |
+| Reranker     | mxbai-rerank-xsmall-v1 | INT8, ~40MB (for -f mode)  |
 
 ## Mojo Patterns
 
@@ -135,32 +137,34 @@ parallelize[worker](num_items)
 
 ## Code Standards
 
-| Aspect | Standard |
-|--------|----------|
-| Formatting | `mojo format` (automatic) |
-| Imports | stdlib → external → local |
-| Functions | Docstrings on public APIs |
-| Memory | Explicit cleanup, no leaks |
-| Errors | `raises` for recoverable, `abort` for fatal |
+| Aspect     | Standard                                    |
+| ---------- | ------------------------------------------- |
+| Formatting | `mojo format` (automatic)                   |
+| Imports    | stdlib → external → local                   |
+| Functions  | Docstrings on public APIs                   |
+| Memory     | Explicit cleanup, no leaks                  |
+| Errors     | `raises` for recoverable, `abort` for fatal |
 
 ## Verification
 
-| Check | Command | Pass Criteria |
-|-------|---------|---------------|
-| Build | `pixi run build-ext` | Zero errors |
-| Test | `pixi run test` | All pass |
-| Smoke | `pixi run hhg "test" ./src` | Returns results |
-| Wheel | `uv build --wheel` | Platform-tagged wheel |
+| Check | Command                     | Pass Criteria         |
+| ----- | --------------------------- | --------------------- |
+| Build | `pixi run build-ext`        | Zero errors           |
+| Test  | `pixi run test`             | All pass              |
+| Smoke | `pixi run hhg "test" ./src` | Returns results       |
+| Wheel | `uv build --wheel`          | Platform-tagged wheel |
 
 ## Release to PyPI
 
 **DO NOT trigger release workflow unless user explicitly says "publish to PyPI".**
 
 Prerequisites (one-time):
+
 1. Configure PyPI trusted publishing at https://pypi.org/manage/account/publishing/
 2. Add pending publisher: project=`hygrep`, owner=`nijaru`, repo=`hygrep`, workflow=`release.yml`
 
 To release:
+
 ```bash
 gh workflow run release.yml -f version=X.Y.Z
 ```
@@ -171,9 +175,9 @@ Or via GitHub UI: Actions → Release → Run workflow → Enter version
 
 **Read order:** `ai/STATUS.md` → `ai/DECISIONS.md`
 
-| File | Purpose |
-|------|---------|
-| `ai/STATUS.md` | Current state, blockers |
+| File              | Purpose                 |
+| ----------------- | ----------------------- |
+| `ai/STATUS.md`    | Current state, blockers |
 | `ai/DECISIONS.md` | Architectural decisions |
 
 ## External References
