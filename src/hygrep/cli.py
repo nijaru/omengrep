@@ -10,6 +10,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.status import Status
 
 from . import __version__
 
@@ -58,8 +59,6 @@ def index_exists(root: Path) -> bool:
 
 def build_index(root: Path, quiet: bool = False) -> None:
     """Build semantic index for directory."""
-    from rich.status import Status
-
     from .scanner import scan
     from .semantic import SemanticIndex
 
@@ -429,13 +428,16 @@ def search(
 
     # Escape hatches: grep mode
     if exact or regex:
+        mode = "regex" if regex else "exact"
         if not quiet:
-            mode = "regex" if regex else "exact"
-            err_console.print(f"[dim]Searching ({mode})...[/]")
-
-        t0 = time.perf_counter()
-        results = grep_search(query, path)
-        search_time = time.perf_counter() - t0
+            with Status(f"Searching ({mode})...", console=err_console):
+                t0 = time.perf_counter()
+                results = grep_search(query, path)
+                search_time = time.perf_counter() - t0
+        else:
+            t0 = time.perf_counter()
+            results = grep_search(query, path)
+            search_time = time.perf_counter() - t0
 
         if not results:
             if not json_output:
@@ -454,11 +456,14 @@ def search(
     # Fast mode: grep + rerank (no index)
     if fast:
         if not quiet:
-            err_console.print("[dim]Searching (grep + rerank)...[/]")
-
-        t0 = time.perf_counter()
-        results = fast_search(query, path, n=n)
-        search_time = time.perf_counter() - t0
+            with Status("Searching (grep + rerank)...", console=err_console):
+                t0 = time.perf_counter()
+                results = fast_search(query, path, n=n)
+                search_time = time.perf_counter() - t0
+        else:
+            t0 = time.perf_counter()
+            results = fast_search(query, path, n=n)
+            search_time = time.perf_counter() - t0
 
         if not results:
             if not json_output:
@@ -517,18 +522,25 @@ def search(
 
         if stale_count > 0:
             if not quiet:
-                err_console.print(f"[dim]Updating index ({stale_count} files changed)...[/]")
-            stats = index.update(files)
-            if not quiet and stats.get("blocks", 0) > 0:
-                err_console.print(f"[dim]  Updated {stats['blocks']} blocks[/]")
+                with Status(
+                    f"Updating index ({stale_count} files changed)...", console=err_console
+                ):
+                    stats = index.update(files)
+                if stats.get("blocks", 0) > 0:
+                    err_console.print(f"[dim]  Updated {stats['blocks']} blocks[/]")
+            else:
+                index.update(files)
 
     # Run semantic search
     if not quiet:
-        err_console.print(f"[dim]Searching for: {query}[/]")
-
-    t0 = time.perf_counter()
-    results = semantic_search(query, search_path, index_root, n=n, threshold=threshold)
-    search_time = time.perf_counter() - t0
+        with Status(f"Searching for: {query}...", console=err_console):
+            t0 = time.perf_counter()
+            results = semantic_search(query, search_path, index_root, n=n, threshold=threshold)
+            search_time = time.perf_counter() - t0
+    else:
+        t0 = time.perf_counter()
+        results = semantic_search(query, search_path, index_root, n=n, threshold=threshold)
+        search_time = time.perf_counter() - t0
 
     if not results:
         if not json_output:
@@ -597,8 +609,6 @@ def build(
     By default, does an incremental update (only changed files).
     Use --force to delete and rebuild from scratch.
     """
-    from rich.status import Status
-
     from .scanner import scan
     from .semantic import HAS_OMENDB, SemanticIndex
 
@@ -634,9 +644,10 @@ def build(
             return
 
         if not quiet:
-            err_console.print(f"[dim]Updating {stale_count} files...[/]")
-
-        stats = index.update(files)
+            with Status(f"Updating {stale_count} files...", console=err_console):
+                stats = index.update(files)
+        else:
+            stats = index.update(files)
 
         if not quiet:
             console.print(
