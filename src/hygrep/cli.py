@@ -629,10 +629,9 @@ def build(
     if not index_exists(path):
         parent = find_parent_index(path)
         if parent and not force:
-            err_console.print(f"[yellow]Parent index at {parent} covers this directory.[/]")
-            err_console.print(f"[dim]Run 'hhg build {parent}' to update it.[/]")
-            err_console.print("[dim]Or use 'hhg build --force' to create separate index here.[/]")
-            raise typer.Exit(EXIT_ERROR)
+            if not quiet:
+                err_console.print(f"[dim]Using parent index at {parent}[/]")
+            path = parent
 
     # Find subdir indexes that will be superseded
     subdir_indexes = find_subdir_indexes(path)
