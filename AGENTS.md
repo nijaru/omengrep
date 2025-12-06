@@ -4,7 +4,7 @@
 
 How it works:
 
-1. **Index**: ModernBERT embeddings for code blocks (requires `hhg build` first)
+1. **Index**: ModernBERT embeddings for code blocks (requires `hhg build` first, or set `HHG_AUTO_BUILD=1`)
 2. **Search**: Vector similarity via omendb (auto-updates stale files)
 3. **Fallback**: `-f` for grep + neural rerank, `-e`/`-r` for exact/regex grep
 

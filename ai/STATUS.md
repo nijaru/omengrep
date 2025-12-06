@@ -29,6 +29,7 @@ Semantic-first code search with ModernBERT embeddings:
 **Index UX:**
 
 - Requires explicit `hhg build` before semantic search
+- Set `HHG_AUTO_BUILD=1` to auto-build on first search
 - Walk-up discovery: `hhg "query" ./src/foo` finds index at `./` or `./src/`
 - Stale auto-update: Changed files updated automatically during search
 - Progress: Spinner for scanning, progress bar for embedding

@@ -4,6 +4,7 @@ If you want grep, use rg. If you want semantic understanding, use hhg.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -496,11 +497,20 @@ def search(
     index_root, existing_index = find_index(path)
     search_path = path  # May be a subdir of index_root
 
-    # Check if index exists - require explicit build
+    # Check if index exists
     if existing_index is None:
-        err_console.print("[red]Error:[/] No index found. Run 'hhg build' first.")
-        err_console.print("[dim]Tip: Use -f for fast mode (grep + rerank) without an index[/]")
-        raise typer.Exit(EXIT_ERROR)
+        # Check if auto-build is enabled via env var
+        if os.environ.get("HHG_AUTO_BUILD", "").lower() in ("1", "true", "yes"):
+            # Auto-build enabled
+            if not quiet:
+                err_console.print("[dim]Building index (HHG_AUTO_BUILD=1)...[/]")
+            build_index(path, quiet=quiet)
+            index_root = path
+        else:
+            # Require explicit build
+            err_console.print("[red]Error:[/] No index found. Run 'hhg build' first.")
+            err_console.print("[dim]Tip: Use -f for fast mode, or set HHG_AUTO_BUILD=1[/]")
+            raise typer.Exit(EXIT_ERROR)
 
     if not no_index:
         # Found existing index - check for stale files and auto-update
