@@ -152,8 +152,23 @@ class TestFastMode:
 # =============================================================================
 
 
+def _ensure_index_built():
+    """Build index for golden dir if not already built."""
+    index_dir = GOLDEN_DIR / ".hhg"
+    if not (index_dir / "manifest.json").exists():
+        # Build index quietly
+        sys.argv = ["hygrep", "-q", "build", str(GOLDEN_DIR)]
+        with suppress(SystemExit):
+            cli.main()
+
+
 class TestReranking:
     """Tests that use the model for reranking."""
+
+    @classmethod
+    def setup_class(cls):
+        """Build index before running semantic tests."""
+        _ensure_index_built()
 
     def test_semantic_password_hash(self):
         """Semantic search for password hashing."""
