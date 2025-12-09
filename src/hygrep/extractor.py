@@ -1,6 +1,6 @@
+import logging
 import os
 import re
-import sys
 from typing import Any
 
 import tree_sitter_bash
@@ -32,6 +32,8 @@ try:
     HAS_MOJO = True
 except ImportError:
     HAS_MOJO = False
+
+logger = logging.getLogger(__name__)
 
 # Text/doc file extensions (recursive chunking with context)
 TEXT_EXTENSIONS = {".md", ".mdx", ".markdown", ".txt", ".rst"}
@@ -201,7 +203,7 @@ class ContextExtractor:
                 if lang_name and lang_name in QUERIES:
                     self.queries[ext] = Query(lang, QUERIES[lang_name])
             except Exception as e:
-                print(f"Warning: Failed to load parser for {ext}: {e}", file=sys.stderr)
+                logger.debug("Failed to load parser for %s: %s", ext, e)
 
     def _ext_to_lang_name(self, ext: str) -> str | None:
         """Map file extension to language name for queries."""
@@ -616,7 +618,7 @@ class ContextExtractor:
             cursor = QueryCursor(q_obj)
             captures = cursor.captures(tree.root_node)
         except Exception as e:
-            print(f"Query error for {file_path}: {e}", file=sys.stderr)
+            logger.debug("Query error for %s: %s", file_path, e)
             return self._fallback_sliding_window(file_path, content, query)
 
         blocks = []

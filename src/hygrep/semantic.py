@@ -169,6 +169,10 @@ class SemanticIndex:
             self._db = omendb.open(self.vectors_path, dimensions=DIMENSIONS)
         return self._db
 
+    def close(self) -> None:
+        """Close database handle and release lock."""
+        self._db = None
+
     def _file_hash(self, path: Path) -> str:
         """Get hash of file content for change detection."""
         content = path.read_bytes()
@@ -582,7 +586,7 @@ class SemanticIndex:
                 items_to_insert.append(
                     {
                         "id": new_id,
-                        "vector": item["embedding"],
+                        "vector": item["vector"],
                         "metadata": metadata,
                     }
                 )

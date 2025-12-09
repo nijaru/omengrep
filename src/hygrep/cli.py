@@ -409,7 +409,7 @@ def search(
                 index.update(files)
 
         # Release lock before search
-        index._db = None
+        index.close()
 
     # Run semantic search
     if not quiet:
