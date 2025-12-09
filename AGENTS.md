@@ -1,18 +1,18 @@
 # hygrep (hhg)
 
-**Semantic code search. Describe what you're looking for, get relevant code.**
+**Hybrid file search — semantic + keyword matching**
 
 How it works:
 
-1. **Index**: ModernBERT embeddings for code blocks (requires `hhg build` first, or set `HHG_AUTO_BUILD=1`)
-2. **Search**: Vector similarity via omendb (auto-updates stale files)
+1. **Index**: ModernBERT embeddings + text for hybrid search (requires `hhg build` first, or set `HHG_AUTO_BUILD=1`)
+2. **Search**: Hybrid (semantic + BM25) via omendb (auto-updates stale files)
 
 ## Quick Reference
 
 ```bash
 pixi run build-ext            # Build Mojo scanner extension
-pixi run hhg build ./src      # Build semantic index (required first)
-pixi run hhg "query" ./src    # Semantic search (requires index)
+pixi run hhg build ./src      # Build index (required first)
+pixi run hhg "query" ./src    # Hybrid search (requires index)
 pixi run hhg --json "query" . # JSON output for agents
 pixi run test                 # Run all tests
 ```
@@ -20,11 +20,11 @@ pixi run test                 # Run all tests
 ## Architecture
 
 ```
-Semantic Search:
-Query → Embed → Vector search (omendb) → Results
-               ↓
-         Requires 'hhg build' first (.hhg/)
-         Auto-updates stale files on search
+Hybrid Search:
+Query → Embed → Hybrid search (semantic + BM25) → Results
+                        ↓
+             Requires 'hhg build' first (.hhg/)
+             Auto-updates stale files on search
 
 Index hierarchy:
 - Building: checks parent (refuses if exists), merges subdirs (fast vector copy)
@@ -65,7 +65,7 @@ hatch_build.py          # Platform wheel hook
 | Python       | >=3.11, <3.14         | CLI + inference            |
 | ONNX Runtime | >=1.16                | Model execution            |
 | Tree-sitter  | >=0.24                | AST parsing (22 languages) |
-| omendb       | >=0.0.1a1             | Vector database            |
+| omendb       | >=0.0.8               | Hybrid vector + BM25 DB    |
 | Embeddings   | ModernBERT-embed-base | INT8, 256 dims, ~40MB      |
 
 ## Mojo Patterns

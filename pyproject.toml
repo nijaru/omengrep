@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hygrep"
-version = "0.0.12"
-description = "Semantic code search with automatic indexing"
+version = "0.0.13"
+description = "Hybrid file search — semantic + keyword matching"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11,<3.14"

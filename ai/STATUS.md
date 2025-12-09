@@ -2,12 +2,12 @@
 
 | Metric    | Value                             | Updated    |
 | --------- | --------------------------------- | ---------- |
-| Phase     | 14 (Hybrid Search)                | 2025-12-09 |
-| Version   | 0.0.12 (PyPI)                     | 2025-12-05 |
+| Phase     | 15 (Release 0.0.13)               | 2025-12-09 |
+| Version   | 0.0.13 (pending release)          | 2025-12-09 |
 | Branch    | main                              | 2025-12-09 |
 | PyPI      | https://pypi.org/project/hygrep/  | 2025-12-05 |
 | CLI       | `hhg` (primary), `hygrep` (alias) | 2025-12-05 |
-| Languages | 22                                | 2025-12-03 |
+| Languages | 22 + prose (md, txt, rst)         | 2025-12-09 |
 | Perf      | ~20k files/sec (Mojo)             | 2025-12-02 |
 
 ## Architecture (Hybrid Search)
@@ -72,8 +72,7 @@ None.
 
 ## Next Steps
 
-1. Update README/docs for hybrid positioning
-2. Tag new release (0.0.13)
+1. Trigger release workflow for 0.0.13
 
 ## Branch Status
 

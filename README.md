@@ -1,6 +1,6 @@
 # hygrep (hhg)
 
-**Semantic code search with automatic indexing**
+**Hybrid file search — semantic + keyword matching**
 
 ```bash
 pip install hygrep
@@ -10,7 +10,7 @@ hhg "authentication flow" ./src
 
 ## What it does
 
-Search your codebase using natural language. Results are functions and classes ranked by relevance:
+Search code and text using natural language. Combines semantic understanding with keyword matching (BM25) for accurate results:
 
 ```bash
 $ hhg build ./src                    # Build index first
@@ -30,13 +30,15 @@ errors.rs:7 class AppError
 
 ## Why hhg over grep?
 
-grep finds text. hhg finds code.
+grep finds exact text. hhg understands what you're looking for.
 
 | Query            | grep finds                | hhg finds                     |
 | ---------------- | ------------------------- | ----------------------------- |
 | "error handling" | Comments mentioning it    | `errorHandler()`, `AppError`  |
 | "authentication" | Strings containing "auth" | `login()`, `verify_token()`   |
 | "database"       | Config files, comments    | `Connection`, `query()`, `Db` |
+
+**Hybrid search** combines semantic understanding (finds related concepts) with BM25 keyword matching (finds exact terms). Best of both worlds.
 
 Use grep/ripgrep for exact strings (`TODO`, `FIXME`, import statements).
 Use hhg when you want implementations, not mentions.
@@ -109,15 +111,17 @@ Compact JSON (`--json --compact`): Same fields without `content`.
 ## How it Works
 
 ```
-Query → Embed → Vector search (omendb) → Results
-         ↓
-    Requires 'hhg build' first (.hhg/)
-    Auto-updates stale files on search
+Query → Embed → Hybrid search (semantic + BM25) → Results
+                        ↓
+             Requires 'hhg build' first (.hhg/)
+             Auto-updates stale files on search
 ```
 
-## Supported Languages
+## Supported Files
 
-Bash, C, C++, C#, Elixir, Go, Java, JavaScript, JSON, Kotlin, Lua, Mojo, PHP, Python, Ruby, Rust, Svelte, Swift, TOML, TypeScript, YAML, Zig
+**Code** (22 languages): Bash, C, C++, C#, Elixir, Go, Java, JavaScript, JSON, Kotlin, Lua, Mojo, PHP, Python, Ruby, Rust, Svelte, Swift, TOML, TypeScript, YAML, Zig
+
+**Text**: Markdown, plain text, RST — smart chunking with header context for docs, blog posts, research papers
 
 ## Development
 
