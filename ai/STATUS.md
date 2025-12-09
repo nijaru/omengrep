@@ -12,7 +12,7 @@
 
 ## Architecture (Hybrid Search)
 
-Hybrid search combining semantic (embeddings) + lexical (BM25) via omendb 0.0.7:
+Hybrid search combining semantic (embeddings) + lexical (BM25) via omendb 0.0.8:
 
 | Component              | Status | Notes                                       |
 | ---------------------- | ------ | ------------------------------------------- |
@@ -37,8 +37,11 @@ Hybrid search combining semantic (embeddings) + lexical (BM25) via omendb 0.0.7:
 **Prose chunking (markdown, txt, rst):**
 
 - Recursive splitting: paragraph → line → sentence → word
-- ~250 token chunks with ~30 token overlap
+- ~400 token chunks with ~50 token overlap (industry baseline)
+- Character-based token estimation (~4 chars/token)
+- Regex sentence detection (handles `.`, `!`, `?`)
 - Header context injection: `Section > Subsection | content`
+- Markdown code blocks extracted separately with language tag
 - Works well for blog posts, research papers, documentation
 
 **Commands:**

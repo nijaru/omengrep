@@ -36,10 +36,11 @@ except ImportError:
 # Text/doc file extensions (recursive chunking with context)
 TEXT_EXTENSIONS = {".md", ".mdx", ".markdown", ".txt", ".rst"}
 
-# Chunking parameters for prose
-CHUNK_SIZE = 250  # Target ~250 tokens (~190 words)
-CHUNK_OVERLAP = 30  # ~30 token overlap between chunks
-MIN_CHUNK_SIZE = 20  # Minimum tokens to create a chunk
+# Chunking parameters for prose (based on industry best practices)
+# See: https://unstructured.io/blog/chunking-for-rag-best-practices
+CHUNK_SIZE = 400  # Target ~400 tokens - industry baseline for balanced retrieval
+CHUNK_OVERLAP = 50  # ~50 tokens (~12.5%) overlap for context continuity
+MIN_CHUNK_SIZE = 30  # Minimum tokens to create a chunk
 
 LANGUAGE_CAPSULES = {
     ".bash": tree_sitter_bash.language(),
@@ -244,8 +245,16 @@ class ContextExtractor:
         return ext_map.get(ext)
 
     def _estimate_tokens(self, text: str) -> int:
-        """Rough token count estimate (~0.75 tokens per word)."""
-        return int(len(text.split()) * 1.3)
+        """Estimate token count using character-based heuristic.
+
+        ~4 characters per token for English prose (GPT/BERT tokenizers).
+        More accurate than word-based estimation for mixed content.
+        """
+        return max(1, len(text) // 4)
+
+    # Sentence boundary pattern - matches ., !, ? followed by space or end
+    # Handles quotes and avoids common abbreviations
+    _SENTENCE_PATTERN = re.compile(r'(?<=[.!?])\s+(?=[A-Z"\'])|(?<=[.!?])$')
 
     def _split_text_recursive(
         self,
@@ -256,19 +265,29 @@ class ContextExtractor:
         """Recursively split text into chunks of target size.
 
         Tries separators in order: paragraphs → lines → sentences → words.
+        Uses regex for better sentence boundary detection.
         """
         if separators is None:
-            separators = ["\n\n", "\n", ". ", " "]
+            # Use None as sentinel for regex-based sentence splitting
+            separators = ["\n\n", "\n", None, " "]  # None = sentence regex
 
         if self._estimate_tokens(text) <= chunk_size:
             return [text] if text.strip() else []
 
         # Try each separator
         for i, sep in enumerate(separators):
-            if sep not in text:
-                continue
+            # Handle sentence regex (None sentinel)
+            if sep is None:
+                parts = self._SENTENCE_PATTERN.split(text)
+                parts = [p for p in parts if p]  # Remove empty strings
+                if len(parts) <= 1:
+                    continue
+                sep = " "  # Use space as joiner for sentences
+            else:
+                if sep not in text:
+                    continue
+                parts = text.split(sep)
 
-            parts = text.split(sep)
             chunks = []
             current = ""
 
@@ -307,60 +326,99 @@ class ContextExtractor:
         return chunks
 
     def _add_overlap(self, chunks: list[str], overlap: int = CHUNK_OVERLAP) -> list[str]:
-        """Add overlap between chunks by prepending end of previous chunk."""
+        """Add overlap between chunks by prepending end of previous chunk.
+
+        Uses clean overlap without markers to avoid polluting embeddings.
+        """
         if len(chunks) <= 1 or overlap <= 0:
             return chunks
 
         result = [chunks[0]]
         for i in range(1, len(chunks)):
             prev_words = chunks[i - 1].split()
-            # Take last N tokens worth of words from previous chunk
+            # Take last N words from previous chunk as overlap
             overlap_words = prev_words[-overlap:] if len(prev_words) > overlap else prev_words
             overlap_text = " ".join(overlap_words)
-            # Prepend overlap with marker
-            result.append(f"...{overlap_text} {chunks[i]}")
+            # Clean overlap - no markers that would pollute embeddings
+            result.append(f"{overlap_text} {chunks[i]}")
         return result
 
     def _parse_markdown_structure(self, content: str) -> list[dict[str, Any]]:
-        """Parse markdown into structured sections with header hierarchy."""
+        """Parse markdown into structured sections with header hierarchy.
+
+        Extracts:
+        - Text sections under headers
+        - Fenced code blocks as separate searchable items
+        """
         lines = content.split("\n")
         sections = []
         current_headers: list[str] = []  # Stack of headers by level
         current_content: list[str] = []
         current_start = 0
         in_code_block = False
+        code_block_start = 0
+        code_block_lang = None
+        code_block_lines: list[str] = []
+
+        def save_current_section(end_line: int):
+            """Helper to save accumulated text content."""
+            if current_content:
+                text = "\n".join(current_content).strip()
+                if text:
+                    sections.append(
+                        {
+                            "headers": list(current_headers),
+                            "content": text,
+                            "start_line": current_start,
+                            "end_line": end_line,
+                            "type": "text",
+                        }
+                    )
 
         for i, line in enumerate(lines):
-            # Track code blocks to avoid parsing headers inside them
-            if line.startswith("```") or line.startswith("~~~"):
-                in_code_block = not in_code_block
-                current_content.append(line)
+            # Check for code block fence
+            fence_match = re.match(r"^(`{3,}|~{3,})(\w+)?", line)
+            if fence_match:
+                if not in_code_block:
+                    # Starting a code block - save any accumulated text first
+                    save_current_section(i - 1)
+                    current_content = []
+
+                    in_code_block = True
+                    code_block_start = i
+                    code_block_lang = fence_match.group(2)  # May be None
+                    code_block_lines = []
+                else:
+                    # Ending a code block - extract it as separate item
+                    in_code_block = False
+                    if code_block_lines:
+                        code_content = "\n".join(code_block_lines)
+                        if code_content.strip():
+                            sections.append(
+                                {
+                                    "headers": list(current_headers),
+                                    "content": code_content,
+                                    "start_line": code_block_start,
+                                    "end_line": i,
+                                    "type": "code",
+                                    "language": code_block_lang,
+                                }
+                            )
+                    current_start = i + 1
                 continue
 
             if in_code_block:
-                current_content.append(line)
+                code_block_lines.append(line)
                 continue
 
-            # Check for markdown header
+            # Check for markdown header (ATX style: # Header)
             header_match = re.match(r"^(#{1,6})\s+(.+)$", line)
             if header_match:
-                # Save previous section if it has content
-                if current_content:
-                    text = "\n".join(current_content).strip()
-                    if text:
-                        sections.append(
-                            {
-                                "headers": list(current_headers),
-                                "content": text,
-                                "start_line": current_start,
-                                "end_line": i - 1,
-                            }
-                        )
+                save_current_section(i - 1)
 
                 # Update header stack
                 level = len(header_match.group(1))
                 title = header_match.group(2).strip()
-                # Truncate stack to current level and add new header
                 current_headers = current_headers[: level - 1]
                 current_headers.append(title)
 
@@ -370,17 +428,7 @@ class ContextExtractor:
                 current_content.append(line)
 
         # Don't forget last section
-        if current_content:
-            text = "\n".join(current_content).strip()
-            if text:
-                sections.append(
-                    {
-                        "headers": list(current_headers),
-                        "content": text,
-                        "start_line": current_start,
-                        "end_line": len(lines) - 1,
-                    }
-                )
+        save_current_section(len(lines) - 1)
 
         return sections
 
@@ -407,8 +455,28 @@ class ContextExtractor:
                 section_content = section["content"]
                 headers = section["headers"]
                 context = " > ".join(headers) if headers else None
+                section_type = section.get("type", "text")
 
-                # Split section content into chunks
+                # Handle code blocks differently - don't chunk them
+                if section_type == "code":
+                    lang = section.get("language") or "code"
+                    # Prepend language and context for better embeddings
+                    code_prefix = f"{context} | {lang}" if context else lang
+                    content_with_context = f"{code_prefix}\n{section_content}"
+
+                    blocks.append(
+                        {
+                            "type": "code",
+                            "name": lang,
+                            "context": context,
+                            "start_line": section["start_line"],
+                            "end_line": section["end_line"],
+                            "content": content_with_context,
+                        }
+                    )
+                    continue
+
+                # Split text section content into chunks
                 chunks = self._split_text_recursive(section_content)
                 chunks = self._add_overlap(chunks)
 

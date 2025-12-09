@@ -99,7 +99,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.7-h3691f8a_5.conda
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/cb/ac/d868631278f413088cdffa17ac6f0377783a7a142f44d2b0ab1b2c2bac40/omendb-0.0.7-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/e7/b6/f29f8d649956c2e9b0c86f35060c0c81e61ef24eeff3c749d8d3b20132f6/omendb-0.0.8-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: git+https://github.com/lsh/tree-sitter-mojo.git#564d5a8489e20e5f723020ae40308888699055c0
@@ -210,7 +210,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hd0aec43_5.conda
       - pypi: https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/af/b2/16a10d191383342ce179d9f76799b8cc473d95dd123ff6b0fc4d4dcc01fc/omendb-0.0.7-cp313-cp313-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/2a/46/c7174ed35583e85686b3586a36db6d5a993e25a0021e595bb0f15f656483/omendb-0.0.8-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: git+https://github.com/lsh/tree-sitter-mojo.git#564d5a8489e20e5f723020ae40308888699055c0
@@ -1465,19 +1465,19 @@ packages:
   - pkg:pypi/numpy?source=hash-mapping
   size: 6791770
   timestamp: 1763350918650
-- pypi: https://files.pythonhosted.org/packages/af/b2/16a10d191383342ce179d9f76799b8cc473d95dd123ff6b0fc4d4dcc01fc/omendb-0.0.7-cp313-cp313-macosx_11_0_arm64.whl
+- pypi: https://files.pythonhosted.org/packages/2a/46/c7174ed35583e85686b3586a36db6d5a993e25a0021e595bb0f15f656483/omendb-0.0.8-cp313-cp313-macosx_11_0_arm64.whl
   name: omendb
-  version: 0.0.7
-  sha256: 12f0337dde48f10c58ac37dd76d4ca37185714256a093acc2ac40ca994800d6e
+  version: 0.0.8
+  sha256: 1c10a06b9ac5476f0a77eed570f97ae1da6d3b36975a32063837f37ecaccfc1b
   requires_dist:
   - numpy>=1.24.4
   - langchain-core>=0.2.0 ; extra == 'langchain'
   - llama-index-core>=0.10.0 ; extra == 'llamaindex'
   requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/cb/ac/d868631278f413088cdffa17ac6f0377783a7a142f44d2b0ab1b2c2bac40/omendb-0.0.7-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/e7/b6/f29f8d649956c2e9b0c86f35060c0c81e61ef24eeff3c749d8d3b20132f6/omendb-0.0.8-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
   name: omendb
-  version: 0.0.7
-  sha256: 157a76ed5fd4f03eff867932b6dddd5d310d9079235028c22844fe146b57ae01
+  version: 0.0.8
+  sha256: f2e17fb9e4614f4e3835a87032fd21333a42b10bea4d0b8e5b56a26703a0ceaa
   requires_dist:
   - numpy>=1.24.4
   - langchain-core>=0.2.0 ; extra == 'langchain'
