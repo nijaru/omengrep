@@ -26,12 +26,20 @@ Hybrid search combining semantic (embeddings) + lexical (BM25) via omendb 0.0.7:
 | Explicit build         | Done   | Requires `hhg build` before search          |
 | Index hierarchy        | Done   | Parent check, subdir merge, walk-up         |
 | **Hybrid search**      | Done   | BM25 + vector via omendb, alpha=0.5 balance |
+| **Prose chunking**     | Done   | Recursive splitting + header context        |
 
 **Manifest v4 changes:**
 
 - Text content stored with vectors for BM25 search
 - Falls back to vector-only for older indexes
 - Rebuild with `hhg build --force` to enable hybrid on existing indexes
+
+**Prose chunking (markdown, txt, rst):**
+
+- Recursive splitting: paragraph → line → sentence → word
+- ~250 token chunks with ~30 token overlap
+- Header context injection: `Section > Subsection | content`
+- Works well for blog posts, research papers, documentation
 
 **Commands:**
 
@@ -61,9 +69,8 @@ None.
 
 ## Next Steps
 
-1. Better text chunking for prose (recursive splitting + header context)
-2. Update README/docs for hybrid positioning
-3. Tag new release (0.0.13)
+1. Update README/docs for hybrid positioning
+2. Tag new release (0.0.13)
 
 ## Branch Status
 

@@ -33,8 +33,13 @@ try:
 except ImportError:
     HAS_MOJO = False
 
-# Text/doc file extensions (paragraph-based extraction)
+# Text/doc file extensions (recursive chunking with context)
 TEXT_EXTENSIONS = {".md", ".mdx", ".markdown", ".txt", ".rst"}
+
+# Chunking parameters for prose
+CHUNK_SIZE = 250  # Target ~250 tokens (~190 words)
+CHUNK_OVERLAP = 30  # ~30 token overlap between chunks
+MIN_CHUNK_SIZE = 20  # Minimum tokens to create a chunk
 
 LANGUAGE_CAPSULES = {
     ".bash": tree_sitter_bash.language(),
@@ -238,55 +243,218 @@ class ContextExtractor:
         }
         return ext_map.get(ext)
 
+    def _estimate_tokens(self, text: str) -> int:
+        """Rough token count estimate (~0.75 tokens per word)."""
+        return int(len(text.split()) * 1.3)
+
+    def _split_text_recursive(
+        self,
+        text: str,
+        chunk_size: int = CHUNK_SIZE,
+        separators: list[str] | None = None,
+    ) -> list[str]:
+        """Recursively split text into chunks of target size.
+
+        Tries separators in order: paragraphs → lines → sentences → words.
+        """
+        if separators is None:
+            separators = ["\n\n", "\n", ". ", " "]
+
+        if self._estimate_tokens(text) <= chunk_size:
+            return [text] if text.strip() else []
+
+        # Try each separator
+        for i, sep in enumerate(separators):
+            if sep not in text:
+                continue
+
+            parts = text.split(sep)
+            chunks = []
+            current = ""
+
+            for part in parts:
+                candidate = current + sep + part if current else part
+                if self._estimate_tokens(candidate) <= chunk_size:
+                    current = candidate
+                else:
+                    if current:
+                        chunks.append(current)
+                    # If single part exceeds chunk_size, recurse with finer separator
+                    if self._estimate_tokens(part) > chunk_size and i + 1 < len(separators):
+                        chunks.extend(
+                            self._split_text_recursive(part, chunk_size, separators[i + 1 :])
+                        )
+                    else:
+                        current = part
+
+            if current:
+                chunks.append(current)
+
+            if chunks:
+                return chunks
+
+        # Fallback: hard split by words
+        words = text.split()
+        chunks = []
+        current_words = []
+        for word in words:
+            current_words.append(word)
+            if self._estimate_tokens(" ".join(current_words)) >= chunk_size:
+                chunks.append(" ".join(current_words))
+                current_words = []
+        if current_words:
+            chunks.append(" ".join(current_words))
+        return chunks
+
+    def _add_overlap(self, chunks: list[str], overlap: int = CHUNK_OVERLAP) -> list[str]:
+        """Add overlap between chunks by prepending end of previous chunk."""
+        if len(chunks) <= 1 or overlap <= 0:
+            return chunks
+
+        result = [chunks[0]]
+        for i in range(1, len(chunks)):
+            prev_words = chunks[i - 1].split()
+            # Take last N tokens worth of words from previous chunk
+            overlap_words = prev_words[-overlap:] if len(prev_words) > overlap else prev_words
+            overlap_text = " ".join(overlap_words)
+            # Prepend overlap with marker
+            result.append(f"...{overlap_text} {chunks[i]}")
+        return result
+
+    def _parse_markdown_structure(self, content: str) -> list[dict[str, Any]]:
+        """Parse markdown into structured sections with header hierarchy."""
+        lines = content.split("\n")
+        sections = []
+        current_headers: list[str] = []  # Stack of headers by level
+        current_content: list[str] = []
+        current_start = 0
+        in_code_block = False
+
+        for i, line in enumerate(lines):
+            # Track code blocks to avoid parsing headers inside them
+            if line.startswith("```") or line.startswith("~~~"):
+                in_code_block = not in_code_block
+                current_content.append(line)
+                continue
+
+            if in_code_block:
+                current_content.append(line)
+                continue
+
+            # Check for markdown header
+            header_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+            if header_match:
+                # Save previous section if it has content
+                if current_content:
+                    text = "\n".join(current_content).strip()
+                    if text:
+                        sections.append(
+                            {
+                                "headers": list(current_headers),
+                                "content": text,
+                                "start_line": current_start,
+                                "end_line": i - 1,
+                            }
+                        )
+
+                # Update header stack
+                level = len(header_match.group(1))
+                title = header_match.group(2).strip()
+                # Truncate stack to current level and add new header
+                current_headers = current_headers[: level - 1]
+                current_headers.append(title)
+
+                current_content = []
+                current_start = i
+            else:
+                current_content.append(line)
+
+        # Don't forget last section
+        if current_content:
+            text = "\n".join(current_content).strip()
+            if text:
+                sections.append(
+                    {
+                        "headers": list(current_headers),
+                        "content": text,
+                        "start_line": current_start,
+                        "end_line": len(lines) - 1,
+                    }
+                )
+
+        return sections
+
     def _extract_text_blocks(
         self,
         file_path: str,
         content: str,
     ) -> list[dict[str, Any]]:
-        """Extract text blocks from markdown/text files using paragraph chunking."""
+        """Extract text blocks from markdown/text files with smart chunking.
+
+        Features:
+        - Recursive splitting (paragraph → line → sentence → word)
+        - Overlap between chunks for context continuity
+        - Header hierarchy context injection for markdown
+        """
         blocks = []
+        ext = os.path.splitext(file_path)[1].lower()
 
-        # Split on blank lines (one or more empty lines)
-        paragraphs = re.split(r"\n\s*\n", content)
+        # For markdown, use structure-aware parsing
+        if ext in {".md", ".mdx", ".markdown"}:
+            sections = self._parse_markdown_structure(content)
 
-        line_num = 1
-        for para in paragraphs:
-            para = para.strip()
+            for section in sections:
+                section_content = section["content"]
+                headers = section["headers"]
+                context = " > ".join(headers) if headers else None
 
-            # Skip tiny fragments (headers alone, empty, etc.)
-            if len(para) < 30:
-                line_num += para.count("\n") + 2
-                continue
+                # Split section content into chunks
+                chunks = self._split_text_recursive(section_content)
+                chunks = self._add_overlap(chunks)
 
-            # Determine block type
-            block_type = "text"
-            name = None
+                for chunk in chunks:
+                    if self._estimate_tokens(chunk) < MIN_CHUNK_SIZE:
+                        continue
 
-            # Check if starts with markdown header
-            header_match = re.match(r"^(#{1,6})\s+(.+?)(?:\n|$)", para)
-            if header_match:
-                name = header_match.group(2).strip()
-                block_type = "section"
+                    # Determine block type and name
+                    block_type = "section" if headers else "text"
+                    name = headers[-1] if headers else None
 
-            # Check for code block
-            if para.startswith("```") or para.startswith("~~~"):
-                block_type = "code"
-                # Try to get language from fence
-                fence_match = re.match(r"^[`~]{3,}(\w+)?", para)
-                if fence_match and fence_match.group(1):
-                    name = fence_match.group(1)
+                    # Prepend context to content for better embeddings
+                    content_with_context = f"{context} | {chunk}" if context else chunk
 
-            blocks.append(
-                {
-                    "type": block_type,
-                    "name": name,
-                    "start_line": line_num,
-                    "end_line": line_num + para.count("\n"),
-                    "content": para,
-                }
-            )
+                    blocks.append(
+                        {
+                            "type": block_type,
+                            "name": name,
+                            "context": context,
+                            "start_line": section["start_line"],
+                            "end_line": section["end_line"],
+                            "content": content_with_context,
+                        }
+                    )
+        else:
+            # For plain text (.txt, .rst), use simple recursive splitting
+            chunks = self._split_text_recursive(content)
+            chunks = self._add_overlap(chunks)
 
-            line_num += para.count("\n") + 2  # +2 for the blank line separator
+            line_num = 0
+            for chunk in chunks:
+                if self._estimate_tokens(chunk) < MIN_CHUNK_SIZE:
+                    continue
+
+                # Estimate line numbers
+                chunk_lines = chunk.count("\n") + 1
+                blocks.append(
+                    {
+                        "type": "text",
+                        "name": None,
+                        "start_line": line_num,
+                        "end_line": line_num + chunk_lines,
+                        "content": chunk,
+                    }
+                )
+                line_num += chunk_lines
 
         return blocks
 
