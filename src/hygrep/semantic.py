@@ -23,6 +23,47 @@ VECTORS_DIR = "vectors"
 MANIFEST_FILE = "manifest.json"
 MANIFEST_VERSION = 3  # v3: relative paths
 
+# Common code abbreviations and synonyms for query expansion
+CODE_SYNONYMS: dict[str, list[str]] = {
+    "auth": ["authentication", "authorize", "authorization"],
+    "authn": ["authentication"],
+    "authz": ["authorization"],
+    "config": ["configuration", "settings", "options"],
+    "cfg": ["config", "configuration"],
+    "db": ["database"],
+    "err": ["error", "exception"],
+    "exc": ["exception", "error"],
+    "fn": ["function"],
+    "func": ["function"],
+    "impl": ["implementation", "implement"],
+    "init": ["initialize", "initialization"],
+    "msg": ["message"],
+    "param": ["parameter"],
+    "params": ["parameters"],
+    "req": ["request"],
+    "res": ["response"],
+    "resp": ["response"],
+    "ret": ["return"],
+    "srv": ["server", "service"],
+    "svc": ["service"],
+    "util": ["utility", "utilities"],
+    "utils": ["utilities", "utility"],
+    "val": ["value", "validate", "validation"],
+}
+
+
+def expand_query_terms(query: str) -> set[str]:
+    """Expand query with common code synonyms.
+
+    Returns set of all terms to look for (original + expansions).
+    """
+    terms = set()
+    for word in query.lower().split():
+        terms.add(word)
+        if word in CODE_SYNONYMS:
+            terms.update(CODE_SYNONYMS[word])
+    return terms
+
 
 def find_index_root(search_path: Path) -> tuple[Path, Path | None]:
     """Walk up directory tree to find existing index.
@@ -329,6 +370,9 @@ class SemanticIndex:
     def search(self, query: str, k: int = 10) -> list[dict]:
         """Search for code blocks similar to query.
 
+        Uses hybrid approach: semantic similarity + keyword boost.
+        Query terms are expanded with common code synonyms.
+
         Args:
             query: Natural language query.
             k: Number of results to return.
@@ -342,11 +386,14 @@ class SemanticIndex:
         # Embed query
         query_embedding = self.embedder.embed_one(query)
 
-        # If filtering by scope, request more results to ensure we get k after filtering
-        search_k = k * 3 if self.search_scope else k
+        # Expand query terms for keyword matching
+        query_terms = expand_query_terms(query)
+
+        # Request more results for hybrid re-ranking
+        search_k = k * 3
         results = db.search(query_embedding.tolist(), k=search_k)
 
-        # Format results
+        # Format results with hybrid scoring
         output = []
         for r in results:
             meta = r.get("metadata", {})
@@ -359,6 +406,23 @@ class SemanticIndex:
             # Convert to absolute path for display
             abs_file = self._to_absolute(rel_file)
 
+            # Base score from semantic similarity
+            semantic_score = (2.0 - r.get("distance", 0)) / 2.0
+
+            # Hybrid boost: check for literal query term matches
+            content = (meta.get("content") or "").lower()
+            name = (meta.get("name") or "").lower()
+            text_to_check = f"{name} {content}"
+
+            # Count matching terms (including expanded synonyms)
+            matches = sum(1 for term in query_terms if term in text_to_check)
+            if matches > 0:
+                # Boost 10% per matching term, max 50% boost
+                boost = min(1.5, 1.0 + (0.1 * matches))
+                final_score = min(1.0, semantic_score * boost)
+            else:
+                final_score = semantic_score
+
             output.append(
                 {
                     "file": abs_file,
@@ -367,16 +431,13 @@ class SemanticIndex:
                     "line": meta.get("start_line", 0),
                     "end_line": meta.get("end_line", 0),
                     "content": meta.get("content", ""),
-                    "score": (2.0 - r.get("distance", 0))
-                    / 2.0,  # Cosine distance 0-2 → similarity 0-1
+                    "score": final_score,
                 }
             )
 
-            # Stop once we have enough results
-            if len(output) >= k:
-                break
-
-        return output
+        # Re-sort by hybrid score and return top k
+        output.sort(key=lambda x: -x["score"])
+        return output[:k]
 
     def is_indexed(self) -> bool:
         """Check if index exists."""

@@ -25,7 +25,7 @@ QUERY_PREFIX = "search_query: "
 DOCUMENT_PREFIX = "search_document: "
 
 
-# Global embedder instance for caching and pre-warming
+# Global embedder instance for caching across calls (useful for library usage)
 _global_embedder: "Embedder | None" = None
 _global_lock = threading.Lock()
 
@@ -34,25 +34,13 @@ def get_embedder(cache_dir: str | None = None) -> "Embedder":
     """Get or create the global embedder instance.
 
     Using a global instance enables query embedding caching across calls.
+    Useful when hygrep is used as a library with multiple searches.
     """
     global _global_embedder
     with _global_lock:
         if _global_embedder is None:
             _global_embedder = Embedder(cache_dir=cache_dir)
         return _global_embedder
-
-
-def prewarm() -> None:
-    """Pre-warm the embedder model in a background thread.
-
-    Call this early (e.g., on import) to avoid cold start latency on first query.
-    """
-
-    def _load():
-        get_embedder()._ensure_loaded()
-
-    thread = threading.Thread(target=_load, daemon=True)
-    thread.start()
 
 
 class Embedder:

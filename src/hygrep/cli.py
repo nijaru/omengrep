@@ -15,12 +15,6 @@ from rich.status import Status
 
 from . import __version__
 
-# Pre-warm embedder if HHG_PREWARM=1 (reduces cold start latency)
-if os.environ.get("HHG_PREWARM", "").lower() in ("1", "true", "yes"):
-    from .embedder import prewarm
-
-    prewarm()
-
 # Consoles
 console = Console()
 err_console = Console(stderr=True)
