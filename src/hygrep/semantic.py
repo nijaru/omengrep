@@ -21,48 +21,7 @@ except ImportError:
 INDEX_DIR = ".hhg"
 VECTORS_DIR = "vectors"
 MANIFEST_FILE = "manifest.json"
-MANIFEST_VERSION = 3  # v3: relative paths
-
-# Common code abbreviations and synonyms for query expansion
-CODE_SYNONYMS: dict[str, list[str]] = {
-    "auth": ["authentication", "authorize", "authorization"],
-    "authn": ["authentication"],
-    "authz": ["authorization"],
-    "config": ["configuration", "settings", "options"],
-    "cfg": ["config", "configuration"],
-    "db": ["database"],
-    "err": ["error", "exception"],
-    "exc": ["exception", "error"],
-    "fn": ["function"],
-    "func": ["function"],
-    "impl": ["implementation", "implement"],
-    "init": ["initialize", "initialization"],
-    "msg": ["message"],
-    "param": ["parameter"],
-    "params": ["parameters"],
-    "req": ["request"],
-    "res": ["response"],
-    "resp": ["response"],
-    "ret": ["return"],
-    "srv": ["server", "service"],
-    "svc": ["service"],
-    "util": ["utility", "utilities"],
-    "utils": ["utilities", "utility"],
-    "val": ["value", "validate", "validation"],
-}
-
-
-def expand_query_terms(query: str) -> set[str]:
-    """Expand query with common code synonyms.
-
-    Returns set of all terms to look for (original + expansions).
-    """
-    terms = set()
-    for word in query.lower().split():
-        terms.add(word)
-        if word in CODE_SYNONYMS:
-            terms.update(CODE_SYNONYMS[word])
-    return terms
+MANIFEST_VERSION = 4  # v4: hybrid search with text field
 
 
 def find_index_root(search_path: Path) -> tuple[Path, Path | None]:
@@ -247,7 +206,11 @@ class SemanticIndex:
                         ]
                 files = new_files
                 data["files"] = files
-                data["version"] = MANIFEST_VERSION
+                data["version"] = 3
+
+            # v3 -> v4: hybrid search (text field added)
+            # No manifest migration needed - search() falls back to vector-only
+            # for indexes without text. Rebuild with `hhg build --force` to enable hybrid.
 
             return data
         return {"version": MANIFEST_VERSION, "files": {}}
@@ -336,13 +299,14 @@ class SemanticIndex:
             # Generate embeddings
             embeddings = self.embedder.embed(texts)
 
-            # Store in omendb
+            # Store in omendb with text for hybrid search
             items = []
             for j, block_info in enumerate(batch):
                 items.append(
                     {
                         "id": block_info["id"],
                         "vector": embeddings[j].tolist(),
+                        "text": block_info["text"],  # Enable hybrid search
                         "metadata": {
                             "file": block_info["file"],
                             "type": block_info["block"]["type"],
@@ -370,8 +334,8 @@ class SemanticIndex:
     def search(self, query: str, k: int = 10) -> list[dict]:
         """Search for code blocks similar to query.
 
-        Uses hybrid approach: semantic similarity + keyword boost.
-        Query terms are expanded with common code synonyms.
+        Uses hybrid search combining semantic similarity (embeddings) and
+        keyword matching (BM25) via omendb's search_hybrid.
 
         Args:
             query: Natural language query.
@@ -386,14 +350,20 @@ class SemanticIndex:
         # Embed query
         query_embedding = self.embedder.embed_one(query)
 
-        # Expand query terms for keyword matching
-        query_terms = expand_query_terms(query)
+        # Use hybrid search if text index is available, otherwise fall back to vector-only
+        search_k = k * 3  # Request more for scope filtering
+        if db.has_text_search():
+            results = db.search_hybrid(
+                query_embedding.tolist(),
+                query,
+                k=search_k,
+                alpha=0.5,  # Balance between vector and text
+            )
+        else:
+            # Fall back to vector-only search for older indexes
+            results = db.search(query_embedding.tolist(), k=search_k)
 
-        # Request more results for hybrid re-ranking
-        search_k = k * 3
-        results = db.search(query_embedding.tolist(), k=search_k)
-
-        # Format results with hybrid scoring
+        # Format results
         output = []
         for r in results:
             meta = r.get("metadata", {})
@@ -406,22 +376,13 @@ class SemanticIndex:
             # Convert to absolute path for display
             abs_file = self._to_absolute(rel_file)
 
-            # Base score from semantic similarity
-            semantic_score = (2.0 - r.get("distance", 0)) / 2.0
-
-            # Hybrid boost: check for literal query term matches
-            content = (meta.get("content") or "").lower()
-            name = (meta.get("name") or "").lower()
-            text_to_check = f"{name} {content}"
-
-            # Count matching terms (including expanded synonyms)
-            matches = sum(1 for term in query_terms if term in text_to_check)
-            if matches > 0:
-                # Boost 10% per matching term, max 50% boost
-                boost = min(1.5, 1.0 + (0.1 * matches))
-                final_score = min(1.0, semantic_score * boost)
+            # Score from hybrid search (RRF) or vector search (distance)
+            if "score" in r:
+                # Hybrid search returns score directly
+                score = r["score"]
             else:
-                final_score = semantic_score
+                # Vector-only search returns distance, convert to score
+                score = (2.0 - r.get("distance", 0)) / 2.0
 
             output.append(
                 {
@@ -431,11 +392,11 @@ class SemanticIndex:
                     "line": meta.get("start_line", 0),
                     "end_line": meta.get("end_line", 0),
                     "content": meta.get("content", ""),
-                    "score": final_score,
+                    "score": score,
                 }
             )
 
-        # Re-sort by hybrid score and return top k
+        # Sort by score (hybrid results may need re-sorting after scope filtering)
         output.sort(key=lambda x: -x["score"])
         return output[:k]
 
@@ -533,9 +494,22 @@ class SemanticIndex:
     def clear(self) -> None:
         """Delete the index."""
         import shutil
+        import time
+
+        # Close db handle if open
+        self._db = None
 
         if self.index_dir.exists():
-            shutil.rmtree(self.index_dir)
+            # omendb may briefly hold file locks, retry if needed
+            for _ in range(3):
+                try:
+                    shutil.rmtree(self.index_dir)
+                    break
+                except OSError:
+                    time.sleep(0.1)
+            else:
+                # Final attempt with ignore_errors
+                shutil.rmtree(self.index_dir, ignore_errors=True)
 
     def merge_from_subdir(self, subdir_index_path: Path) -> dict:
         """Merge vectors from a subdirectory index into this one.
