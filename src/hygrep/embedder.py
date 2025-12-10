@@ -147,39 +147,26 @@ class Embedder:
 
         return embeddings.astype(np.float32)
 
-    def embed(self, texts: list[str], interactive: bool = False) -> np.ndarray:
+    def embed(self, texts: list[str]) -> np.ndarray:
         """Generate embeddings for documents (for indexing).
 
         Args:
             texts: List of text strings to embed.
-            interactive: If True, use smaller batches and yield GIL frequently
-                         to keep spinners responsive. Slightly slower but smoother UX.
 
         Returns:
             numpy array of shape (len(texts), DIMENSIONS) with normalized embeddings.
         """
-        import time
-
         if not texts:
             return np.array([], dtype=np.float32).reshape(0, DIMENSIONS)
 
         # Add document prefix for ModernBERT
         prefixed = [DOCUMENT_PREFIX + t for t in texts]
 
-        # Use smaller batches in interactive mode for responsive UI
-        # Batch of 8 takes ~0.1-0.2s, allowing 5-10Hz spinner updates
-        batch_size = 8 if interactive else BATCH_SIZE
-
         # Process in batches to avoid memory issues and reduce padding waste
         all_embeddings = []
-        for i in range(0, len(prefixed), batch_size):
-            batch = prefixed[i : i + batch_size]
-            embeddings = self._embed_batch(batch)
-            all_embeddings.append(embeddings)
-
-            # Yield GIL to allow spinner thread to update
-            if interactive:
-                time.sleep(0)
+        for i in range(0, len(prefixed), BATCH_SIZE):
+            batch = prefixed[i : i + BATCH_SIZE]
+            all_embeddings.append(self._embed_batch(batch))
 
         return np.vstack(all_embeddings)
 

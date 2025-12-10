@@ -96,7 +96,7 @@ def build_index(root: Path, quiet: bool = False) -> None:
 
         with Status("Indexing...", console=err_console):
             t0 = time.perf_counter()
-            stats = index.index(files, interactive=True)
+            stats = index.index(files)
             index_time = time.perf_counter() - t0
 
         # Summary
