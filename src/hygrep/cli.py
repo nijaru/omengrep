@@ -335,6 +335,19 @@ def search(
         list_indexes(path=actual_path)
         raise typer.Exit()
 
+    elif query == "model":
+        if _check_help_flag():
+            console.print(
+                "Usage: hhg model [--reinstall]\n\n"
+                "Check or download embedding model.\n"
+                "Use --reinstall to force re-download."
+            )
+            raise typer.Exit()
+        _, flags = _parse_subcommand_args(path, {"reinstall": False})
+        err_console.print("[dim]Running: hhg model[/]")
+        model(reinstall=flags["reinstall"])
+        raise typer.Exit()
+
     if version:
         console.print(f"hhg {__version__}")
         raise typer.Exit()
@@ -344,11 +357,12 @@ def search(
             Panel(
                 "[bold]hhg[/] - Semantic code search\n\n"
                 "[dim]Usage:[/]\n"
-                "  hhg <query> [path]    Search for code semantically\n"
-                "  hhg build [path]      Build/update index\n"
-                "  hhg status [path]     Show index status\n"
-                "  hhg list [path]       List all indexes\n"
-                "  hhg clean [path]      Delete index\n\n"
+                "  hhg <query> [path]   Search for code semantically\n"
+                "  hhg build [path]     Build/update index\n"
+                "  hhg status [path]    Show index status\n"
+                "  hhg list [path]      List all indexes\n"
+                "  hhg clean [path]     Delete index\n"
+                "  hhg model            Check/download embedding model\n\n"
                 "[dim]Options:[/]\n"
                 "  -n N                  Number of results (default: 10)\n"
                 "  -t TYPE               Filter by file type (py,js,ts)\n"
@@ -671,6 +685,47 @@ def clean(
         console.print(f"[dim]Deleted {deleted_count} indexes[/]")
 
 
+@app.command()
+def model(
+    reinstall: bool = typer.Option(False, "--reinstall", help="Force re-download model"),
+):
+    """Check or download embedding model.
+
+    The model auto-downloads on first use, but this command lets you:
+    - Pre-download for offline use or CI
+    - Re-download if corrupted
+    """
+    from huggingface_hub import hf_hub_download, try_to_load_from_cache
+
+    from .embedder import MODEL_FILE, MODEL_REPO, TOKENIZER_FILE
+
+    # Check if already cached
+    model_cached = try_to_load_from_cache(MODEL_REPO, MODEL_FILE)
+    tokenizer_cached = try_to_load_from_cache(MODEL_REPO, TOKENIZER_FILE)
+    is_installed = model_cached is not None and tokenizer_cached is not None
+
+    if is_installed and not reinstall:
+        console.print(f"[green]✓[/] Model installed: {MODEL_REPO}")
+        raise typer.Exit()
+
+    # Download
+    action = "Reinstalling" if reinstall else "Downloading"
+    console.print(f"[dim]{action} {MODEL_REPO}...[/]")
+
+    try:
+        for filename in [MODEL_FILE, TOKENIZER_FILE]:
+            hf_hub_download(
+                repo_id=MODEL_REPO,
+                filename=filename,
+                force_download=reinstall,
+            )
+        console.print(f"[green]✓[/] Model installed: {MODEL_REPO}")
+    except Exception as e:
+        err_console.print(f"[red]Error:[/] Failed to download model: {e}")
+        err_console.print("[dim]Check network connection and try again[/]")
+        raise typer.Exit(EXIT_ERROR)
+
+
 _subcommand_original_argv = None
 
 
@@ -737,7 +792,7 @@ def main():
     # Solution: strip path/flags from subcommands and let callback parse saved argv
     argv = sys.argv[1:]  # Skip program name
 
-    if len(argv) >= 1 and argv[0] in ("clean", "build", "list", "status"):
+    if len(argv) >= 1 and argv[0] in ("clean", "build", "list", "status", "model"):
         # Save original args for callback to parse
         _subcommand_original_argv = argv
         # Just pass subcommand name to typer
