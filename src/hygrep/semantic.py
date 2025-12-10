@@ -222,6 +222,7 @@ class SemanticIndex:
         files: dict[str, str],
         batch_size: int = 128,
         on_progress: Callable[[int, int, str], None] | None = None,
+        interactive: bool = False,
     ) -> dict:
         """Index code files for semantic search.
 
@@ -229,6 +230,7 @@ class SemanticIndex:
             files: Dict mapping file paths to content.
             batch_size: Number of code blocks to embed at once.
             on_progress: Callback(current, total, message) for progress updates.
+            interactive: If True, use smaller embedding batches for responsive UI.
 
         Returns:
             Stats dict with counts.
@@ -309,8 +311,9 @@ class SemanticIndex:
                 if on_progress:
                     on_progress(i, total, f"Embedding {len(batch)} blocks...")
 
-                # Generate embeddings (releases GIL during ONNX inference)
-                embeddings = self.embedder.embed(texts)
+                # Generate embeddings
+                # In interactive mode, use smaller batches with GIL yields for responsive UI
+                embeddings = self.embedder.embed(texts, interactive=interactive)
 
                 # Prepare items for storage
                 items = []

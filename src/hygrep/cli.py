@@ -34,7 +34,6 @@ app = typer.Typer(
     help="Semantic code search",
     no_args_is_help=False,
     invoke_without_command=True,
-    add_completion=False,
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
 
@@ -97,7 +96,7 @@ def build_index(root: Path, quiet: bool = False) -> None:
 
         with Status("Indexing...", console=err_console):
             t0 = time.perf_counter()
-            stats = index.index(files)
+            stats = index.index(files, interactive=True)
             index_time = time.perf_counter() - t0
 
         # Summary
