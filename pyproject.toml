@@ -57,7 +57,7 @@ dependencies = [
     "huggingface-hub>=0.20",
     "typer>=0.9",
     "rich>=13.0",
-    "omendb>=0.0.8",
+    "omendb>=0.0.9",
 ]
 
 [project.optional-dependencies]
