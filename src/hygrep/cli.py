@@ -336,17 +336,28 @@ def search(
         raise typer.Exit()
 
     elif query == "model":
-        if _check_help_flag():
-            console.print(
-                "Usage: hhg model [--reinstall]\n\n"
-                "Check or download embedding model.\n"
-                "Use --reinstall to force re-download."
-            )
+        # Check if next arg is "install"
+        args = _subcommand_original_argv[1:] if _subcommand_original_argv else []
+        if args and args[0] == "install":
+            if _check_help_flag():
+                console.print(
+                    "Usage: hhg model install\n\n"
+                    "Download embedding model for offline use or to fix corrupted download."
+                )
+                raise typer.Exit()
+            err_console.print("[dim]Running: hhg model install[/]")
+            model_install()
             raise typer.Exit()
-        _, flags = _parse_subcommand_args(path, {"reinstall": False})
-        err_console.print("[dim]Running: hhg model[/]")
-        model(reinstall=flags["reinstall"])
-        raise typer.Exit()
+        else:
+            if _check_help_flag():
+                console.print(
+                    "Usage: hhg model [install]\n\n"
+                    "Show model status, or install with 'hhg model install'."
+                )
+                raise typer.Exit()
+            err_console.print("[dim]Running: hhg model[/]")
+            model()
+            raise typer.Exit()
 
     if version:
         console.print(f"hhg {__version__}")
@@ -686,38 +697,42 @@ def clean(
 
 
 @app.command()
-def model(
-    reinstall: bool = typer.Option(False, "--reinstall", help="Force re-download model"),
-):
-    """Check or download embedding model.
-
-    The model auto-downloads on first use, but this command lets you:
-    - Pre-download for offline use or CI
-    - Re-download if corrupted
-    """
-    from huggingface_hub import hf_hub_download, try_to_load_from_cache
+def model():
+    """Show embedding model status."""
+    from huggingface_hub import try_to_load_from_cache
 
     from .embedder import MODEL_FILE, MODEL_REPO, TOKENIZER_FILE
 
-    # Check if already cached
     model_cached = try_to_load_from_cache(MODEL_REPO, MODEL_FILE)
     tokenizer_cached = try_to_load_from_cache(MODEL_REPO, TOKENIZER_FILE)
     is_installed = model_cached is not None and tokenizer_cached is not None
 
-    if is_installed and not reinstall:
+    if is_installed:
         console.print(f"[green]✓[/] Model installed: {MODEL_REPO}")
-        raise typer.Exit()
+    else:
+        console.print(f"[yellow]![/] Model not installed: {MODEL_REPO}")
+        console.print("  Run 'hhg model install' to download")
 
-    # Download
-    action = "Reinstalling" if reinstall else "Downloading"
-    console.print(f"[dim]{action} {MODEL_REPO}...[/]")
+
+@app.command(name="model-install")
+def model_install():
+    """Download embedding model.
+
+    The model auto-downloads on first use, but this command lets you
+    pre-download for offline use, CI, or to fix a corrupted download.
+    """
+    from huggingface_hub import hf_hub_download
+
+    from .embedder import MODEL_FILE, MODEL_REPO, TOKENIZER_FILE
+
+    console.print(f"[dim]Downloading {MODEL_REPO}...[/]")
 
     try:
         for filename in [MODEL_FILE, TOKENIZER_FILE]:
             hf_hub_download(
                 repo_id=MODEL_REPO,
                 filename=filename,
-                force_download=reinstall,
+                force_download=True,
             )
         console.print(f"[green]✓[/] Model installed: {MODEL_REPO}")
     except Exception as e:
