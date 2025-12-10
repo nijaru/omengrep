@@ -233,7 +233,6 @@ class SemanticIndex:
         Returns:
             Stats dict with counts.
         """
-
         db = self._ensure_db()
         manifest = self._load_manifest()
 
