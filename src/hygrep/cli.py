@@ -342,9 +342,8 @@ def search(
             )
             raise typer.Exit()
         actual_path, flags = _parse_subcommand_args(path, {"recursive": recursive})
-        err_console.print(
-            f"[dim]Running: hhg clean {actual_path}{' --recursive' if flags['recursive'] else ''}[/]"
-        )
+        flag_str = " --recursive" if flags["recursive"] else ""
+        err_console.print(f"[dim]Running: hhg clean {actual_path}{flag_str}[/]")
         clean(path=actual_path, recursive=flags["recursive"])
         raise typer.Exit()
 
