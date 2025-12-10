@@ -21,12 +21,12 @@ jobs:
             exit 1
           fi
 
-      - name: Validate version matches pyproject.toml
+      - name: Validate version matches VERSION file
         run: |
-          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          if [ "$PYPROJECT_VERSION" != "${{ inputs.version }}" ]; then
-            echo "Error: Input version (${{ inputs.version }}) does not match pyproject.toml ($PYPROJECT_VERSION)"
-            echo "Update pyproject.toml and __init__.py first, then run release"
+          FILE_VERSION=$(cat src/hygrep/VERSION)
+          if [ "$FILE_VERSION" != "${{ inputs.version }}" ]; then
+            echo "Error: Input version (${{ inputs.version }}) does not match VERSION file ($FILE_VERSION)"
+            echo "Update src/hygrep/VERSION first, then run release"
             exit 1
           fi
 
