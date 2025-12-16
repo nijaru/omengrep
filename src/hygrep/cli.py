@@ -803,10 +803,10 @@ def doctor():
         if os.environ.get("PIPX_HOME") or "pipx/venvs" in exe:
             console.print(f"    pipx inject hhg {gpu_pkg}")
         elif "uv/tools" in exe:
-            # uv tool install creates isolated env
             console.print(f"    uv tool install hhg --with {gpu_pkg} --reinstall")
+        elif ".pixi/" in exe:
+            console.print(f"    pixi add --pypi {gpu_pkg}")
         else:
-            # pip or uv in venv
             console.print(f"    pip install {gpu_pkg}")
 
 
