@@ -24,21 +24,14 @@
 ## Uncommitted Changes
 
 - Remove `hygrep` CLI entry point (only `hhg` needed)
+- Fix CLI arg ordering (`--exclude` now works after positional args)
+- Add `--code-only` flag to exclude docs (md, txt, rst, adoc)
 
 ## Open Issues
 
-### High Priority
-
-1. **CLI arg ordering** - `--exclude` must come before positional args
-   - `hhg "query" . --exclude "*.md"` fails
-   - `hhg --exclude "*.md" "query" .` works
-   - Root cause: typer positional args + subcommand pattern
-
-2. **`--code-only` flag** - filter out docs/markdown automatically
-
 ### Medium Priority
 
-3. **More tree-sitter grammars** - evaluate Scala, Haskell, OCaml, R, Julia, etc.
+1. **More tree-sitter grammars** - evaluate Scala, Haskell, OCaml, R, Julia, etc.
 
 ## Architecture
 

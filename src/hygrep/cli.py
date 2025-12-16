@@ -33,7 +33,11 @@ app = typer.Typer(
     help="Semantic code search",
     no_args_is_help=False,
     invoke_without_command=True,
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "allow_interspersed_args": True,
+    },
 )
 
 
@@ -166,9 +170,15 @@ def filter_results(
     results: list[dict],
     file_types: str | None = None,
     exclude: list[str] | None = None,
+    code_only: bool = False,
 ) -> list[dict]:
     """Filter results by file type and exclude patterns."""
     import pathspec
+
+    # Add doc extensions to exclude if code_only
+    if code_only:
+        doc_patterns = ["*.md", "*.markdown", "*.txt", "*.rst", "*.adoc"]
+        exclude = list(exclude or []) + doc_patterns
 
     if not file_types and not exclude:
         return results
@@ -288,6 +298,7 @@ def search(
     # Filtering
     file_types: str = typer.Option(None, "-t", "--type", help="Filter types (py,js,ts)"),
     exclude: list[str] = typer.Option(None, "--exclude", help="Exclude glob pattern"),
+    code_only: bool = typer.Option(False, "--code-only", help="Exclude docs (md, txt, rst)"),
     # Index control
     no_index: bool = typer.Option(False, "--no-index", help="Skip auto-index (fail if missing)"),
     # Meta
@@ -470,7 +481,7 @@ def search(
             err_console.print("[dim]No results found[/]")
         raise typer.Exit(EXIT_NO_MATCH)
 
-    results = filter_results(results, file_types, exclude)
+    results = filter_results(results, file_types, exclude, code_only)
     print_results(results, json_output, files_only, compact, root=path)
 
     if not quiet and not json_output and not files_only:
