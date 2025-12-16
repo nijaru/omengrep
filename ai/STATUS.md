@@ -2,8 +2,8 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 18 (CPU-only)                 | 2025-12-16 |
-| Version   | 0.0.18 (PyPI)                 | 2025-12-16 |
+| Phase     | 19 (polish)                   | 2025-12-16 |
+| Version   | 0.0.19 (PyPI)                 | 2025-12-16 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
@@ -27,9 +27,12 @@
 - Remove `doctor` command (redundant with `hhg model`)
 - Simplify embedder to CPU-only (GPU providers not stable)
 
-## Unreleased
+## v0.0.19 Changes
 
-- Clean up build output: remove scan time, reorder Found → Merged → Skipped → Cleaned up → Indexed
+- Clean up build output: reorder Found → Merged → Skipped → Cleaned up → Indexed
+- Fix singular grammar ("1 result" not "1 results")
+- Quiet mode (`-q`) suppresses "Running:" prefix
+- Fix Mojo and Python warnings (utcnow deprecation, type hints)
 
 ## Open Issues
 
