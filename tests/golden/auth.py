@@ -2,7 +2,7 @@
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class AuthenticationError(Exception):
@@ -29,11 +29,12 @@ def verify_password(password: str, stored_hash: str, salt: bytes) -> bool:
 
 def create_session_token(user_id: str, expires_hours: int = 24) -> dict:
     """Create a new session token for user."""
+    now = datetime.now(timezone.utc)
     return {
         "token": secrets.token_urlsafe(32),
         "user_id": user_id,
-        "created_at": datetime.utcnow().isoformat(),
-        "expires_at": (datetime.utcnow() + timedelta(hours=expires_hours)).isoformat(),
+        "created_at": now.isoformat(),
+        "expires_at": (now + timedelta(hours=expires_hours)).isoformat(),
     }
 
 
@@ -42,7 +43,7 @@ def validate_session(session: dict) -> bool:
     if not session or "expires_at" not in session:
         return False
     expires = datetime.fromisoformat(session["expires_at"])
-    return datetime.utcnow() < expires
+    return datetime.now(timezone.utc) < expires
 
 
 class UserManager:

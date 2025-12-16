@@ -38,7 +38,11 @@ struct Regex:
         var p_copy = pattern
         var c_pattern = Int(p_copy.unsafe_cstr_ptr())
 
-        var ret = regcomp(Int(self._preg), c_pattern, CInt(REG_EXTENDED | REG_NOSUB | REG_ICASE))
+        var ret = regcomp(
+            Int(self._preg),
+            c_pattern,
+            CInt(REG_EXTENDED | REG_NOSUB | REG_ICASE),
+        )
         if ret == 0:
             self._initialized = True
         else:
@@ -46,11 +50,12 @@ struct Regex:
 
     fn __moveinit__(out self, deinit existing: Self):
         self._preg = existing._preg
-        self._pattern = existing._pattern
+        self._pattern = existing._pattern^
         self._initialized = existing._initialized
-        # Null out existing pointer so its destructor doesn't double-free
-        existing._preg = UnsafePointer[UInt8, MutOrigin.external]()
-        existing._initialized = False
+        # Prevent double-free: null out pointer before existing's destructor runs
+        __mlir_op.`lit.ownership.mark_destroyed`(
+            __get_mvalue_as_litref(existing)
+        )
 
     fn __del__(deinit self):
         if self._initialized:

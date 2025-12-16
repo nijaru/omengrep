@@ -62,7 +62,7 @@ def test_find_index_root_walk_up():
 def test_semantic_index_init():
     """Test SemanticIndex initialization."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        idx = SemanticIndex(tmpdir)
+        idx = SemanticIndex(Path(tmpdir))
 
         assert idx.root == Path(tmpdir).resolve()
         assert idx.index_dir == Path(tmpdir).resolve() / INDEX_DIR
@@ -101,7 +101,7 @@ def test_semantic_index_roundtrip():
             files[str(f)] = f.read_text()
 
         # Create index
-        idx = SemanticIndex(tmpdir)
+        idx = SemanticIndex(Path(tmpdir))
         stats = idx.index(files)
 
         assert stats["files"] >= 2
@@ -134,7 +134,7 @@ def test_semantic_index_incremental_update():
         auth_file.write_text("def login(): pass\n")
 
         files = {str(auth_file): auth_file.read_text()}
-        idx = SemanticIndex(tmpdir)
+        idx = SemanticIndex(Path(tmpdir))
         idx.index(files)
 
         initial_count = idx.count()
@@ -169,7 +169,7 @@ def test_semantic_index_stale_detection():
         test_file.write_text("def foo(): pass\n")
 
         files = {str(test_file): test_file.read_text()}
-        idx = SemanticIndex(tmpdir)
+        idx = SemanticIndex(Path(tmpdir))
         idx.index(files)
 
         # No changes yet
@@ -200,7 +200,7 @@ def test_semantic_index_clear():
         (tmpdir / "test.py").write_text("def foo(): pass\n")
         files = {str(tmpdir / "test.py"): "def foo(): pass\n"}
 
-        idx = SemanticIndex(tmpdir)
+        idx = SemanticIndex(Path(tmpdir))
         idx.index(files)
 
         assert idx.is_indexed()
@@ -234,7 +234,7 @@ def test_semantic_index_scope_filtering():
         for f in tmpdir.rglob("*.py"):
             files[str(f)] = f.read_text()
 
-        idx = SemanticIndex(tmpdir)
+        idx = SemanticIndex(Path(tmpdir))
         idx.index(files)
 
         # Search without scope - should find both
@@ -266,7 +266,7 @@ def test_semantic_index_relative_paths():
         (tmpdir / "code.py").write_text("def hello(): pass\n")
         files = {str(tmpdir / "code.py"): "def hello(): pass\n"}
 
-        idx = SemanticIndex(tmpdir)
+        idx = SemanticIndex(Path(tmpdir))
         idx.index(files)
 
         # Check manifest has relative paths
