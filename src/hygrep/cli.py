@@ -357,9 +357,10 @@ def search(
             )
             raise typer.Exit()
         actual_path, flags = _parse_subcommand_args(path, {"force": False, "quiet": quiet})
-        err_console.print(
-            f"[dim]Running: hhg build {actual_path}{' --force' if flags['force'] else ''}[/]"
-        )
+        if not flags["quiet"]:
+            err_console.print(
+                f"[dim]Running: hhg build {actual_path}{' --force' if flags['force'] else ''}[/]"
+            )
         build(path=actual_path, force=flags["force"], quiet=flags["quiet"])
         raise typer.Exit()
 
@@ -495,7 +496,8 @@ def search(
     print_results(results, json_output, files_only, compact, root=path)
 
     if not quiet and not json_output and not files_only:
-        err_console.print(f"[dim]{len(results)} results ({search_time:.2f}s)[/]")
+        result_word = "result" if len(results) == 1 else "results"
+        err_console.print(f"[dim]{len(results)} {result_word} ({search_time:.2f}s)[/]")
 
     raise typer.Exit(EXIT_MATCH if results else EXIT_NO_MATCH)
 
