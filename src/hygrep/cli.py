@@ -750,12 +750,7 @@ def model_install():
 
 @app.command()
 def doctor():
-    """Check setup and suggest optimizations."""
-    import platform
-    import subprocess
-    import sys
-
-    import onnxruntime as ort
+    """Check setup status."""
     from huggingface_hub import try_to_load_from_cache
 
     from .embedder import MODEL_FILE, MODEL_REPO, TOKENIZER_FILE, get_embedder
@@ -774,40 +769,6 @@ def doctor():
     provider = embedder.provider
     provider_name = provider.replace("ExecutionProvider", "")
     console.print(f"[green]✓[/] Provider: {provider_name} (batch {embedder.batch_size})")
-
-    # Detect hardware and suggest upgrades
-    available = set(ort.get_available_providers())
-    system = platform.system()
-    machine = platform.machine()
-
-    gpu_pkg = None
-
-    if "CUDAExecutionProvider" not in available:
-        try:
-            result = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and "GPU" in result.stdout:
-                gpu_pkg = "onnxruntime-gpu"
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-
-    if gpu_pkg is None and "CoreMLExecutionProvider" not in available:
-        if system == "Darwin" and machine == "arm64":
-            gpu_pkg = "onnxruntime-silicon"
-
-    if gpu_pkg:
-        console.print("[yellow]![/] GPU available but not enabled")
-        console.print(f"  For ~3x faster builds, reinstall with [bold]{gpu_pkg}[/]:")
-
-        # Detect installation method and show appropriate command
-        exe = sys.executable.lower()
-        if os.environ.get("PIPX_HOME") or "pipx/venvs" in exe:
-            console.print(f"    pipx inject hhg {gpu_pkg}")
-        elif "uv/tools" in exe:
-            console.print(f"    uv tool install hhg --with {gpu_pkg} --reinstall")
-        elif ".pixi/" in exe:
-            console.print(f"    pixi add --pypi {gpu_pkg}")
-        else:
-            console.print(f"    pip install {gpu_pkg}")
 
 
 _subcommand_original_argv = None

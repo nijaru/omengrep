@@ -15,18 +15,18 @@
 
 - **Package renamed** `hygrep` → `hhg` (clearer: `install hhg → hhg`)
 - **Embedding model** switched to jina-code-int8 (768 dims, ~154MB, better quality)
-- **GPU auto-detection** - CUDA/CoreML/CPU with tuned batch sizes (256/128/32)
-- **Parallel extraction** - multiprocessing for ~3x faster builds (~31s → ~10s potential)
-- **`hhg doctor`** - setup diagnostics, GPU suggestions
+- **Parallel extraction** - multiprocessing for faster builds
+- **`hhg doctor`** - setup diagnostics
 - **`hhg model`** - shows active provider and batch size
 - **Manifest v5** - requires rebuild from v4 (dimension change)
 
-## Uncommitted Changes
+## Uncommitted Changes (v0.0.18)
 
 - Remove `hygrep` CLI entry point (only `hhg` needed)
 - Fix CLI arg ordering (`--exclude` now works after positional args)
 - Add `--code-only` flag to exclude docs (md, txt, rst, adoc)
 - Add 6 new tree-sitter grammars: HTML, CSS, SQL, Julia, HCL/Terraform
+- Remove GPU suggestions from doctor (CoreML/CUDA not stable)
 
 ## Open Issues
 
@@ -48,16 +48,6 @@ Search: Embed query → Hybrid search (semantic + BM25) → Results
 | `src/hygrep/semantic.py`    | Index management, parallel extraction |
 | `src/hygrep/extractor.py`   | Tree-sitter code extraction           |
 | `src/scanner/_scanner.mojo` | Fast file scanning (Mojo)             |
-
-## GPU Acceleration
-
-| Platform      | Package                 | Batch Size |
-| ------------- | ----------------------- | ---------- |
-| NVIDIA        | `onnxruntime-gpu`       | 256        |
-| Apple Silicon | `onnxruntime-silicon`   | 128        |
-| CPU           | `onnxruntime` (default) | 32         |
-
-Run `hhg doctor` for suggestions.
 
 ## Performance (M3 Max, CPU)
 
