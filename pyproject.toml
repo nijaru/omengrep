@@ -68,7 +68,6 @@ dev = [
 
 [project.scripts]
 hhg = "hygrep.cli:main"
-hygrep = "hygrep.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/nijaru/hygrep"

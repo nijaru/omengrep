@@ -1,81 +1,76 @@
 ## Current State
 
-| Metric    | Value                             | Updated    |
-| --------- | --------------------------------- | ---------- |
-| Phase     | 16 (Post-release)                 | 2025-12-09 |
-| Version   | 0.0.13 (PyPI)                     | 2025-12-09 |
-| Branch    | main                              | 2025-12-09 |
-| PyPI      | https://pypi.org/project/hygrep/  | 2025-12-05 |
-| CLI       | `hhg` (primary), `hygrep` (alias) | 2025-12-05 |
-| Languages | 22 + prose (md, txt, rst)         | 2025-12-09 |
-| Perf      | ~20k files/sec (Mojo)             | 2025-12-02 |
+| Metric    | Value                         | Updated    |
+| --------- | ----------------------------- | ---------- |
+| Phase     | 17 (Post-rename)              | 2025-12-16 |
+| Version   | 0.0.17 (PyPI)                 | 2025-12-16 |
+| Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
+| Branch    | main                          | 2025-12-16 |
+| PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
+| CLI       | `hhg`                         | 2025-12-16 |
+| Languages | 22 + prose (md, txt, rst)     | 2025-12-09 |
+| Model     | jina-code-int8 (768 dims)     | 2025-12-16 |
 
-## Architecture (Hybrid Search)
+## v0.0.17 Changes
 
-Hybrid search combining semantic (embeddings) + lexical (BM25) via omendb 0.0.8:
+- **Package renamed** `hygrep` → `hhg` (clearer: `install hhg → hhg`)
+- **Embedding model** switched to jina-code-int8 (768 dims, ~154MB, better quality)
+- **GPU auto-detection** - CUDA/CoreML/CPU with tuned batch sizes (256/128/32)
+- **Parallel extraction** - multiprocessing for ~3x faster builds (~31s → ~10s potential)
+- **`hhg doctor`** - setup diagnostics, GPU suggestions
+- **`hhg model`** - shows active provider and batch size
+- **Manifest v5** - requires rebuild from v4 (dimension change)
 
-| Component              | Status | Notes                                       |
-| ---------------------- | ------ | ------------------------------------------- |
-| embedder.py            | Done   | ModernBERT-embed-base INT8 (256 dims)       |
-| semantic.py            | Done   | Hybrid search via omendb search_hybrid()    |
-| cli.py                 | Done   | 4 commands: build, search, status, clean    |
-| Walk-up index          | Done   | Reuses parent index from subdirs            |
-| Relative paths         | Done   | Manifest v4, portable indexes               |
-| Search scope filtering | Done   | Filter results to search directory          |
-| Auto-update stale      | Done   | Incremental updates (hash-based)            |
-| Explicit build         | Done   | Requires `hhg build` before search          |
-| Index hierarchy        | Done   | Parent check, subdir merge, walk-up         |
-| **Hybrid search**      | Done   | BM25 + vector via omendb, alpha=0.5 balance |
-| **Prose chunking**     | Done   | Recursive splitting + header context        |
+## Uncommitted Changes
 
-**Manifest v4 changes:**
+- Remove `hygrep` CLI entry point (only `hhg` needed)
 
-- Text content stored with vectors for BM25 search
-- Falls back to vector-only for older indexes
-- Rebuild with `hhg build --force` to enable hybrid on existing indexes
+## Open Issues
 
-**Prose chunking (markdown, txt, rst):**
+### High Priority
 
-- Recursive splitting: paragraph → line → sentence → word
-- ~400 token chunks with ~50 token overlap (industry baseline)
-- Character-based token estimation (~4 chars/token)
-- Regex sentence detection (handles `.`, `!`, `?`)
-- Header context injection: `Section > Subsection | content`
-- Markdown code blocks extracted separately with language tag
-- Works well for blog posts, research papers, documentation
+1. **CLI arg ordering** - `--exclude` must come before positional args
+   - `hhg "query" . --exclude "*.md"` fails
+   - `hhg --exclude "*.md" "query" .` works
+   - Root cause: typer positional args + subcommand pattern
 
-**Commands:**
+2. **`--code-only` flag** - filter out docs/markdown automatically
+
+### Medium Priority
+
+3. **More tree-sitter grammars** - evaluate Scala, Haskell, OCaml, R, Julia, etc.
+
+## Architecture
 
 ```
-hhg build ./src       # Build index (required first)
-hhg "query" ./src     # Hybrid search (semantic + BM25)
-hhg status ./src      # Show index status
-hhg clean ./src       # Delete index
+Build:  Scan → Extract (parallel) → Embed (batched) → Store in omendb
+Search: Embed query → Hybrid search (semantic + BM25) → Results
 ```
 
-**Performance (M3 Max):**
+## Key Files
 
-| Phase       | Time   | Notes                             |
-| ----------- | ------ | --------------------------------- |
-| First index | ~34s   | 396 blocks, ModernBERT 512 tokens |
-| Cold search | ~0.9s  | Model loading                     |
-| Warm search | <1ms   | omendb hybrid search              |
-| Auto-update | ~100ms | Per changed file                  |
+| File                        | Purpose                               |
+| --------------------------- | ------------------------------------- |
+| `src/hygrep/cli.py`         | CLI, subcommand handling              |
+| `src/hygrep/embedder.py`    | ONNX embeddings, provider detection   |
+| `src/hygrep/semantic.py`    | Index management, parallel extraction |
+| `src/hygrep/extractor.py`   | Tree-sitter code extraction           |
+| `src/scanner/_scanner.mojo` | Fast file scanning (Mojo)             |
 
-## Blockers
+## GPU Acceleration
 
-None.
+| Platform      | Package                 | Batch Size |
+| ------------- | ----------------------- | ---------- |
+| NVIDIA        | `onnxruntime-gpu`       | 256        |
+| Apple Silicon | `onnxruntime-silicon`   | 128        |
+| CPU           | `onnxruntime` (default) | 32         |
 
-## Known Issues
+Run `hhg doctor` for suggestions.
 
-- Mojo native scanner requires MAX/Mojo runtime (wheels use Python fallback)
+## Performance (M3 Max, CPU)
 
-## Next Steps
-
-None - 0.0.13 released.
-
-## Branch Status
-
-| Branch | Purpose          | Status |
-| ------ | ---------------- | ------ |
-| main   | v2 hybrid search | Active |
+| Phase       | Time  | Notes                 |
+| ----------- | ----- | --------------------- |
+| First index | ~31s  | 530 blocks, jina 768d |
+| Cold search | ~0.9s | Model loading         |
+| Warm search | <1ms  | omendb hybrid search  |
