@@ -96,9 +96,7 @@ def build_index(
 
         # Interactive mode: show spinner for scanning
         with Status("Scanning files...", console=err_console):
-            t0 = time.perf_counter()
             files = scan(str(root), ".", include_hidden=False)
-            scan_time = time.perf_counter() - t0
 
         if not files:
             err_console.print("[yellow]No files found to index[/]")
