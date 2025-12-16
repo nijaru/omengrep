@@ -27,6 +27,10 @@
 - Remove `doctor` command (redundant with `hhg model`)
 - Simplify embedder to CPU-only (GPU providers not stable)
 
+## Unreleased
+
+- Clean up build output: remove scan time, reorder Found → Merged → Skipped → Cleaned up → Indexed
+
 ## Open Issues
 
 None currently tracked.

@@ -68,8 +68,15 @@ def build_index(
     quiet: bool = False,
     workers: int = 0,
     batch_size: int = 128,
-) -> None:
-    """Build semantic index for directory."""
+    merge_info: list[tuple[str, int]] | None = None,
+    defer_summary: bool = False,
+) -> tuple[dict, float] | None:
+    """Build semantic index for directory.
+
+    Returns:
+        If defer_summary=True, returns (stats, index_time) for caller to print.
+        Otherwise returns None.
+    """
     from .scanner import scan
     from .semantic import SemanticIndex
 
@@ -97,7 +104,12 @@ def build_index(
             err_console.print("[yellow]No files found to index[/]")
             return
 
-        err_console.print(f"[dim]Found {len(files)} files ({scan_time:.1f}s)[/]")
+        err_console.print(f"[dim]Found {len(files)} files[/]")
+
+        # Print merge info if any subdirs were merged
+        if merge_info:
+            for subdir, blocks in merge_info:
+                err_console.print(f"[dim]    Merged {blocks} blocks from {subdir}[/]")
 
         # Phase 2: Extract and embed
         index = SemanticIndex(root)
@@ -107,15 +119,21 @@ def build_index(
             stats = index.index(files, workers=workers, batch_size=batch_size)
             index_time = time.perf_counter() - t0
 
-        # Summary
+        # Summary: skipped first, then final count
+        if stats["skipped"]:
+            err_console.print(f"[dim]    Skipped {stats['skipped']} unchanged files[/]")
+
+        # Return stats for caller to print summary, or print it here
+        if defer_summary:
+            return stats, index_time
+
         err_console.print(
-            f"[green]✓[/] Indexed {stats['blocks']} blocks "
+            f"  [green]✓[/] Indexed {stats['blocks']} blocks "
             f"from {stats['files']} files ({index_time:.1f}s)"
         )
-        if stats["skipped"]:
-            err_console.print(f"[dim]  Skipped {stats['skipped']} unchanged files[/]")
         if stats.get("errors", 0) > 0:
             err_console.print(f"[yellow]Warning:[/] {stats['errors']} files failed to index")
+        return None
 
     except KeyboardInterrupt:
         # Partial index is preserved - next build will resume
@@ -591,21 +609,27 @@ def build(
         # No index exists, build fresh
         # First, merge any subdir indexes (much faster than re-embedding)
         merged_any = False
+        merge_info: list[tuple[str, int]] = []
         if subdir_indexes:
-            if not quiet:
-                err_console.print(f"[dim]Merging {len(subdir_indexes)} subdir index(es)...[/]")
             index = SemanticIndex(path)
-            total_merged = 0
             for idx in subdir_indexes:
                 merge_stats = index.merge_from_subdir(idx)
-                total_merged += merge_stats.get("merged", 0)
-            if total_merged > 0:
-                merged_any = True
-                if not quiet:
-                    err_console.print(f"[dim]  Merged {total_merged} blocks from subdir indexes[/]")
+                merged = merge_stats.get("merged", 0)
+                if merged > 0:
+                    merged_any = True
+                    # Get relative subdir name for display
+                    subdir_name = str(idx.parent.relative_to(path))
+                    merge_info.append((subdir_name, merged))
 
         # Build (will skip files already merged via hash matching)
-        build_index(path, quiet=quiet)
+        # Defer summary if we have cleanup to do after
+        has_cleanup = bool(subdir_indexes) or merged_any
+        result = build_index(
+            path,
+            quiet=quiet,
+            merge_info=merge_info if merge_info else None,
+            defer_summary=has_cleanup and not quiet,
+        )
 
         # If we merged, clean up any deleted files from merged manifests
         if merged_any:
@@ -616,13 +640,32 @@ def build(
             if deleted:
                 index.update(files)
                 if not quiet:
-                    err_console.print(f"[dim]  Cleaned up {len(deleted)} deleted file entries[/]")
+                    err_console.print(
+                        f"[dim]    Cleaned up: {len(deleted)} deleted file entries[/]"
+                    )
 
-    # Clean up subdir indexes (now superseded by parent)
+        # Clean up subdir indexes (now superseded by parent)
+        for idx in subdir_indexes:
+            shutil.rmtree(idx)
+            if not quiet:
+                err_console.print(f"[dim]    Cleaned up: {idx.parent.relative_to(path)}[/]")
+
+        # Print deferred summary after all cleanup
+        if result is not None:
+            stats, index_time = result
+            err_console.print(
+                f"  [green]✓[/] Indexed {stats['blocks']} blocks "
+                f"from {stats['files']} files ({index_time:.1f}s)"
+            )
+            if stats.get("errors", 0) > 0:
+                err_console.print(f"[yellow]Warning:[/] {stats['errors']} files failed to index")
+        return
+
+    # Clean up subdir indexes (now superseded by parent) - for non-fresh builds
     for idx in subdir_indexes:
         shutil.rmtree(idx)
         if not quiet:
-            err_console.print(f"[dim]Removed superseded index: {idx.parent.relative_to(path)}[/]")
+            err_console.print(f"[dim]    Cleaned up: {idx.parent.relative_to(path)}[/]")
 
 
 @app.command(name="list")
