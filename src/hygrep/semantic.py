@@ -289,18 +289,25 @@ class SemanticIndex:
                 db.delete(old_blocks)
                 stats["deleted"] += len(old_blocks)
 
-            files_to_process.append({"path": file_path, "content": content, "rel_path": rel_path, "hash": file_hash})
+            files_to_process.append(
+                {
+                    "path": file_path,
+                    "content": content,
+                    "rel_path": rel_path,
+                    "hash": file_hash,
+                }
+            )
 
         if not files_to_process:
             if stats["deleted"] > 0:
                 db.flush()
             return stats
-        db.flush() # Commit deletions
+        db.flush()  # Commit deletions
 
         # 2. Extract blocks in parallel
         num_workers = workers if workers > 0 else (os.cpu_count() or 1)
         all_blocks = []
-        
+
         with multiprocessing.Pool(num_workers) as pool:
             results = pool.starmap(
                 _extract_blocks_worker,
@@ -324,7 +331,7 @@ class SemanticIndex:
             # remove deleted files from manifest
             for f in files_to_process:
                 manifest["files"].pop(f["rel_path"], None)
-            self._save_manifest(manifest) # Save to record deletions
+            self._save_manifest(manifest)  # Save to record deletions
             return stats
 
         # 3. Embed and store in batches (sequential)
@@ -364,9 +371,9 @@ class SemanticIndex:
             blocks_by_file.setdefault(block["file"], []).append(block["id"])
 
         for rel_path, block_ids in blocks_by_file.items():
-             file_hash = next((b["file_hash"] for b in all_blocks if b["file"] == rel_path), None)
-             if file_hash:
-                 manifest["files"][rel_path] = {"hash": file_hash, "blocks": block_ids}
+            file_hash = next((b["file_hash"] for b in all_blocks if b["file"] == rel_path), None)
+            if file_hash:
+                manifest["files"][rel_path] = {"hash": file_hash, "blocks": block_ids}
 
         # Remove files that now have no blocks
         for f in files_to_process:
