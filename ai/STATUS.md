@@ -16,8 +16,7 @@
 - **Package renamed** `hygrep` → `hhg` (clearer: `install hhg → hhg`)
 - **Embedding model** switched to jina-code-int8 (768 dims, ~154MB, better quality)
 - **Parallel extraction** - multiprocessing for faster builds
-- **`hhg doctor`** - setup diagnostics
-- **`hhg model`** - shows active provider and batch size
+- **`hhg model`** - shows model and provider status
 - **Manifest v5** - requires rebuild from v4 (dimension change)
 
 ## Uncommitted Changes (v0.0.18)
@@ -26,7 +25,8 @@
 - Fix CLI arg ordering (`--exclude` now works after positional args)
 - Add `--code-only` flag to exclude docs (md, txt, rst, adoc)
 - Add 6 new tree-sitter grammars: HTML, CSS, SQL, Julia, HCL/Terraform
-- Remove GPU suggestions from doctor (CoreML/CUDA not stable)
+- Remove `doctor` command (redundant with `hhg model`)
+- Simplify embedder to CPU-only (GPU providers not stable)
 
 ## Open Issues
 

@@ -399,14 +399,6 @@ def search(
             model()
             raise typer.Exit()
 
-    elif query == "doctor":
-        if _check_help_flag():
-            console.print("Usage: hhg doctor\n\nCheck setup and suggest optimizations.")
-            raise typer.Exit()
-        err_console.print("[dim]Running: hhg doctor[/]")
-        doctor()
-        raise typer.Exit()
-
     if version:
         console.print(f"hhg {__version__}")
         raise typer.Exit()
@@ -748,29 +740,6 @@ def model_install():
         raise typer.Exit(EXIT_ERROR)
 
 
-@app.command()
-def doctor():
-    """Check setup status."""
-    from huggingface_hub import try_to_load_from_cache
-
-    from .embedder import MODEL_FILE, MODEL_REPO, TOKENIZER_FILE, get_embedder
-
-    # Check model
-    model_ok = try_to_load_from_cache(MODEL_REPO, MODEL_FILE) is not None
-    tokenizer_ok = try_to_load_from_cache(MODEL_REPO, TOKENIZER_FILE) is not None
-
-    if model_ok and tokenizer_ok:
-        console.print("[green]✓[/] Model installed")
-    else:
-        console.print("[red]✗[/] Model not installed: run [bold]hhg model install[/]")
-
-    # Check provider
-    embedder = get_embedder()
-    provider = embedder.provider
-    provider_name = provider.replace("ExecutionProvider", "")
-    console.print(f"[green]✓[/] Provider: {provider_name} (batch {embedder.batch_size})")
-
-
 _subcommand_original_argv = None
 
 
@@ -837,7 +806,7 @@ def main():
     # Solution: strip path/flags from subcommands and let callback parse saved argv
     argv = sys.argv[1:]  # Skip program name
 
-    if len(argv) >= 1 and argv[0] in ("clean", "build", "list", "status", "model", "doctor"):
+    if len(argv) >= 1 and argv[0] in ("clean", "build", "list", "status", "model"):
         # Save original args for callback to parse
         _subcommand_original_argv = argv
         # Just pass subcommand name to typer
