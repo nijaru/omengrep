@@ -2,8 +2,8 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 19 (polish)                   | 2025-12-16 |
-| Version   | 0.0.19 (PyPI)                 | 2025-12-16 |
+| Phase     | 20 (ranking)                  | 2025-12-18 |
+| Version   | 0.0.20 (PyPI)                 | 2025-12-18 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
@@ -34,7 +34,7 @@
 - Quiet mode (`-q`) suppresses "Running:" prefix
 - Fix Mojo and Python warnings (utcnow deprecation, type hints)
 
-## Unreleased
+## v0.0.20 Changes
 
 - Add code-aware ranking boosts:
   - CamelCase/snake_case aware term matching
