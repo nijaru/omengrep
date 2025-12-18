@@ -242,25 +242,37 @@ def boost_results(results: list[dict], query: str) -> list[dict]:
     """Apply code-aware ranking boosts to search results.
 
     Boosts:
-        - Exact name match: 3x (query contains block name)
-        - Partial name match: 1.5x (query term in block name)
-        - Type hierarchy: class/struct 1.4x, function/method 1.2x, interface/type 1.1x
-        - File path relevance: 1.2x (query term in file path)
+        - Exact name match: 2.5x
+        - Term overlap: +30% per matching term (camelCase/snake_case aware)
+        - Type match: 1.5x if query mentions the type (e.g., "class", "function")
+        - Type hierarchy: class 1.3x, function 1.2x (fallback if no type in query)
+        - File path relevance: 1.15x
+        - Max total boost capped at 4x to prevent over-boosting
     """
     import re
 
     if not results or not query:
         return results
 
-    # Tokenize query into terms (split on whitespace and common separators)
     query_lower = query.lower()
-    query_terms = set(re.split(r"[\s_\-./]+", query_lower))
+
+    # Split camelCase and snake_case, then tokenize
+    # "getUserData" → "get user data", "get_user_data" → "get user data"
+    expanded = re.sub(r"([a-z])([A-Z])", r"\1 \2", query_lower)
+    query_terms = set(re.split(r"[\s_\-./]+", expanded))
     query_terms.discard("")
 
-    # Type boost weights
+    # Common short terms meaningful in code
+    short_whitelist = {"db", "fs", "io", "ui", "id", "ok", "fn", "rx", "tx", "api"}
+    query_terms = {t for t in query_terms if len(t) >= 3 or t in short_whitelist}
+
+    # Detect if user mentioned a specific type in query
+    query_wants_class = any(t in query_terms for t in ("class", "struct", "type"))
+    query_wants_func = any(t in query_terms for t in ("function", "func", "fn", "method", "def"))
+
     type_weights = {
-        "class": 1.4,
-        "struct": 1.4,
+        "class": 1.3,
+        "struct": 1.3,
         "function": 1.2,
         "method": 1.2,
         "interface": 1.1,
@@ -275,27 +287,39 @@ def boost_results(results: list[dict], query: str) -> list[dict]:
         block_type = r.get("type", "").lower()
         file_path = r.get("file", "").lower()
 
-        # 1. Exact name match (strongest signal)
-        if name and name in query_terms:
-            boost *= 3.0
-        # Partial match (name contains query term or vice versa)
-        elif name:
-            for term in query_terms:
-                if len(term) >= 3 and (term in name or name in term):
-                    boost *= 1.5
-                    break
+        # Expand name to handle camelCase/snake_case
+        name_expanded = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
+        name_terms = set(re.split(r"[\s_\-./]+", name_expanded))
+        name_terms.discard("")
 
-        # 2. Type hierarchy boost
-        boost *= type_weights.get(block_type, 1.0)
+        # 1. Name matching
+        if name and name in query_terms:
+            # Exact full name match
+            boost *= 2.5
+        else:
+            # Term overlap (how many query terms appear in name)
+            overlap = query_terms & name_terms
+            if overlap:
+                boost *= 1.0 + (0.3 * len(overlap))  # +30% per matching term
+
+        # 2. Type boost - context-aware
+        if query_wants_class and block_type in ("class", "struct"):
+            boost *= 1.5
+        elif query_wants_func and block_type in ("function", "method"):
+            boost *= 1.5
+        elif not query_wants_class and not query_wants_func:
+            # Fallback: apply default type hierarchy
+            boost *= type_weights.get(block_type, 1.0)
 
         # 3. File path relevance
         if any(term in file_path for term in query_terms if len(term) >= 3):
-            boost *= 1.2
+            boost *= 1.15
 
-        # Update score to boosted value
+        # Cap total boost to prevent over-boosting mediocre semantic matches
+        boost = min(boost, 4.0)
+
         r["score"] = r.get("score", 0) * boost
 
-    # Re-sort by boosted score
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
     return results
 

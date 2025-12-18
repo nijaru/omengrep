@@ -36,7 +36,12 @@
 
 ## Unreleased
 
-- Add code-aware ranking boosts (exact name 3x, type hierarchy, file path)
+- Add code-aware ranking boosts:
+  - CamelCase/snake_case aware term matching
+  - Exact name match: 2.5x, term overlap: +30% per term
+  - Context-aware type boost: 1.5x if query mentions "class"/"function"
+  - File path relevance: 1.15x
+  - Boost cap at 4x to prevent over-boosting
 
 ## Open Issues
 
