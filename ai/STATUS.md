@@ -2,8 +2,8 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 20 (ranking)                  | 2025-12-18 |
-| Version   | 0.0.20 (PyPI)                 | 2025-12-18 |
+| Phase     | 21 (omendb update)            | 2025-12-19 |
+| Version   | 0.0.21 (PyPI)                 | 2025-12-19 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
@@ -34,6 +34,12 @@
 - Quiet mode (`-q`) suppresses "Running:" prefix
 - Fix Mojo and Python warnings (utcnow deprecation, type hints)
 
+## v0.0.21 Changes
+
+- Update omendb to 0.0.12 (bug fixes, subscores API)
+- Fix type annotations to match omendb type stubs
+- Remove unneeded ty ignore rule (omendb now has stubs)
+
 ## v0.0.20 Changes
 
 - Add code-aware ranking boosts:
@@ -51,7 +57,7 @@
   - ~50-80ms overhead
   - Off by default
 
-- **RRF tuning** (if omendb exposes separate BM25/semantic scores)
+- **RRF tuning** (omendb 0.0.12 exposes subscores - can use for custom weighting)
 
 ## Open Issues
 

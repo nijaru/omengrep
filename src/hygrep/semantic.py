@@ -165,7 +165,7 @@ class SemanticIndex:
         self.embedder = get_embedder(cache_dir=cache_dir)
         self.extractor = ContextExtractor()
 
-        self._db: "omendb.Database | None" = None
+        self._db: "omendb.VectorDatabase | None" = None
 
     def __enter__(self) -> "SemanticIndex":
         """Context manager entry."""
@@ -188,7 +188,7 @@ class SemanticIndex:
             return rel_path
         return str(self.root / rel_path)
 
-    def _ensure_db(self) -> "omendb.Database":
+    def _ensure_db(self) -> "omendb.VectorDatabase":
         """Open or create the vector database."""
         if self._db is None:
             self.index_dir.mkdir(parents=True, exist_ok=True)

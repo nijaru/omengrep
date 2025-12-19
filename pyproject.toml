@@ -62,7 +62,7 @@ dependencies = [
     "huggingface-hub>=0.20",
     "typer>=0.9",
     "rich>=13.0",
-    "omendb>=0.0.10",
+    "omendb>=0.0.12",
 ]
 
 [project.optional-dependencies]
@@ -104,6 +104,7 @@ select = ["E", "F", "W", "I"]
 # Ignore unresolved imports for optional/dynamic modules
 [tool.ty.rules]
 unresolved-import = "ignore"  # tomli fallback, _scanner extension
-unresolved-attribute = "ignore"  # omendb lacks type stubs
 possibly-missing-attribute = "ignore"  # onnxruntime lacks stubs
 no-matching-overload = "ignore"  # numpy stubs incomplete
+invalid-argument-type = "ignore"  # omendb TypedDict strictness
+invalid-key = "ignore"  # union result type (SearchResult | HybridSearchResult)
