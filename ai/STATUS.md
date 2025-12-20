@@ -2,8 +2,8 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 21 (omendb update)            | 2025-12-19 |
-| Version   | 0.0.21 (PyPI)                 | 2025-12-19 |
+| Phase     | 22 (skill command)            | 2025-12-19 |
+| Version   | 0.0.22 (PyPI)                 | 2025-12-19 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
@@ -33,6 +33,12 @@
 - Fix singular grammar ("1 result" not "1 results")
 - Quiet mode (`-q`) suppresses "Running:" prefix
 - Fix Mojo and Python warnings (utcnow deprecation, type hints)
+
+## v0.0.22 Changes
+
+- Add `hhg skill` command for Claude Code integration
+- `hhg skill` or `hhg skill install` installs skill to ~/.claude/skills/hhg/
+- `hhg skill show` prints skill content to stdout
 
 ## v0.0.21 Changes
 
