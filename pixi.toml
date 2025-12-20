@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Semantic code search with automatic indexing"
 authors = ["nijaru"]
 channels = ["conda-forge", "https://conda.modular.com/max/", "pytorch"]
-platforms = ["osx-arm64", "linux-64"]
+platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 
 [dependencies]
 max = "25.7.*"

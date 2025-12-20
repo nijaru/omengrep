@@ -2,8 +2,8 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 22 (skill command)            | 2025-12-19 |
-| Version   | 0.0.22 (PyPI)                 | 2025-12-19 |
+| Phase     | 23 (linux arm64)              | 2025-12-20 |
+| Version   | 0.0.23 (PyPI)                 | 2025-12-20 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
@@ -33,6 +33,11 @@
 - Fix singular grammar ("1 result" not "1 results")
 - Quiet mode (`-q`) suppresses "Running:" prefix
 - Fix Mojo and Python warnings (utcnow deprecation, type hints)
+
+## v0.0.23 Changes
+
+- Add Linux arm64 (aarch64) platform support
+- Build wheels for: macOS arm64, Linux x64, Linux arm64
 
 ## v0.0.22 Changes
 
