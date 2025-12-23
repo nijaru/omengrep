@@ -456,6 +456,103 @@ class SemanticIndex:
         output.sort(key=lambda x: -x["score"])
         return output[:k]
 
+    def find_similar(self, file_path: str, line: int | None = None, k: int = 10) -> list[dict]:
+        """Find code blocks similar to a given file/block.
+
+        Uses pure vector similarity (no BM25) to find semantically similar code.
+
+        Args:
+            file_path: Path to the source file (absolute or relative).
+            line: Optional line number to find a specific block.
+            k: Number of similar results to return.
+
+        Returns:
+            List of similar blocks with file, type, name, content, score.
+            Excludes the query block itself.
+        """
+        db = self._ensure_db()
+        manifest = self._load_manifest()
+
+        # Convert to relative path for lookup
+        rel_path = self._to_relative(file_path)
+
+        # Find the block(s) for this file
+        file_entry = manifest.get("files", {}).get(rel_path)
+        if not file_entry or not isinstance(file_entry, dict):
+            return []
+
+        block_ids = file_entry.get("blocks", [])
+        if not block_ids:
+            return []
+
+        # If line specified, find the specific block
+        query_block_id = None
+        if line is not None:
+            for block_id in block_ids:
+                item = db.get(block_id)
+                if item:
+                    meta = item.get("metadata", {})
+                    start = meta.get("start_line", 0)
+                    end = meta.get("end_line", 0)
+                    if start <= line <= end:
+                        query_block_id = block_id
+                        break
+            if not query_block_id:
+                # Line not found in any block, use first block
+                query_block_id = block_ids[0]
+        else:
+            # No line specified, use first block in file
+            query_block_id = block_ids[0]
+
+        # Get the embedding for the query block
+        query_item = db.get(query_block_id)
+        if not query_item:
+            return []
+
+        query_vector = query_item.get("vector")
+        if not query_vector:
+            return []
+
+        # Search by vector similarity (request more to filter out self)
+        results = db.search(query_vector, k=k + len(block_ids))
+
+        # Format results, excluding blocks from the same file
+        output = []
+        for r in results:
+            r_id = r.get("id", "")
+            # Skip blocks from the same file
+            if r_id in block_ids:
+                continue
+
+            meta = r.get("metadata", {})
+            rel_file = meta.get("file", "")
+            abs_file = self._to_absolute(rel_file)
+
+            # Filter by search scope if set
+            if self.search_scope and not rel_file.startswith(self.search_scope):
+                continue
+
+            # Convert distance to score (smaller distance = higher score)
+            distance = r.get("distance", 0)
+            score = (2.0 - distance) / 2.0
+
+            output.append(
+                {
+                    "file": abs_file,
+                    "type": meta.get("type", ""),
+                    "name": meta.get("name", ""),
+                    "line": meta.get("start_line", 0),
+                    "end_line": meta.get("end_line", 0),
+                    "content": meta.get("content", ""),
+                    "score": score,
+                }
+            )
+
+            if len(output) >= k:
+                break
+
+        return output
+
     def is_indexed(self) -> bool:
         """Check if index exists."""
         return self.manifest_path.exists()

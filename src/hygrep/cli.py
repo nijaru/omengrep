@@ -515,6 +515,67 @@ def search(
         skill(action=action, path=None)
         raise typer.Exit()
 
+    elif query == "similar":
+        args = _subcommand_original_argv[1:] if _subcommand_original_argv else []
+        if _check_help_flag():
+            console.print(
+                "Usage: hhg similar <file>[:line] [path] [-n N]\n\n"
+                "Find code similar to a given file or block.\n\n"
+                "Options:\n"
+                "  -n N        Number of results (default: 10)\n"
+                "  -j, --json  JSON output\n"
+                "  -c          Compact output\n"
+                "  -q          Quiet mode\n\n"
+                "Examples:\n"
+                "  hhg similar src/auth.py        # Similar to first block\n"
+                "  hhg similar src/auth.py:42     # Similar to block at line 42\n"
+                "  hhg similar src/auth.py -n 5   # Top 5 similar"
+            )
+            raise typer.Exit()
+        # Parse args and options
+        file_arg = None
+        path_arg = Path(".")
+        n_val = 10
+        json_val = json_output
+        compact_val = compact
+        quiet_val = quiet
+        positionals = []
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "-n" and i + 1 < len(args):
+                n_val = int(args[i + 1])
+                i += 2
+            elif arg in ("-j", "--json"):
+                json_val = True
+                i += 1
+            elif arg in ("-c", "--compact"):
+                compact_val = True
+                i += 1
+            elif arg in ("-q", "--quiet"):
+                quiet_val = True
+                i += 1
+            elif not arg.startswith("-"):
+                positionals.append(arg)
+                i += 1
+            else:
+                i += 1
+        file_arg = positionals[0] if positionals else None
+        if len(positionals) > 1:
+            path_arg = Path(positionals[1])
+        if not file_arg:
+            err_console.print("[red]Error:[/] Missing file path")
+            raise typer.Exit(EXIT_ERROR)
+        similar(
+            file_path=file_arg,
+            path=path_arg,
+            n=n_val,
+            json_output=json_val,
+            compact=compact_val,
+            quiet=quiet_val,
+        )
+        raise typer.Exit()
+
     if version:
         console.print(f"hhg {__version__}")
         raise typer.Exit()
@@ -835,6 +896,71 @@ def clean(
 
 
 @app.command()
+def similar(
+    file_path: str = typer.Argument(..., help="File path (optionally with :line)"),
+    path: Path = typer.Argument(Path("."), help="Search directory"),
+    n: int = typer.Option(10, "-n", help="Number of results"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="JSON output"),
+    compact: bool = typer.Option(False, "-c", "--compact", help="No content in output"),
+    quiet: bool = typer.Option(False, "-q", "--quiet", help="Suppress progress"),
+):
+    """Find code similar to a given file or block.
+
+    Examples:
+        hhg similar src/auth.py           # Find code similar to first block
+        hhg similar src/auth.py:42        # Find code similar to block at line 42
+        hhg similar src/auth.py -n 20     # More results
+    """
+    from .semantic import SemanticIndex
+
+    # Parse file:line format
+    line = None
+    if ":" in file_path:
+        parts = file_path.rsplit(":", 1)
+        if parts[1].isdigit():
+            file_path = parts[0]
+            line = int(parts[1])
+
+    # Resolve paths
+    file_path = str(Path(file_path).resolve())
+    path = path.resolve()
+
+    if not Path(file_path).exists():
+        err_console.print(f"[red]Error:[/] File not found: {file_path}")
+        raise typer.Exit(EXIT_ERROR)
+
+    # Find index
+    index_root, existing_index = find_index(path)
+    if existing_index is None:
+        err_console.print("[red]Error:[/] No index found. Run 'hhg build' first.")
+        raise typer.Exit(EXIT_ERROR)
+
+    # Find similar code
+    if not quiet:
+        with Status("Finding similar code...", console=err_console):
+            index = SemanticIndex(index_root, search_scope=path)
+            results = index.find_similar(file_path, line=line, k=n)
+    else:
+        index = SemanticIndex(index_root, search_scope=path)
+        results = index.find_similar(file_path, line=line, k=n)
+
+    if not results:
+        if not json_output:
+            err_console.print("[dim]No similar code found[/]")
+        raise typer.Exit(EXIT_NO_MATCH)
+
+    # Apply boosts (reuse existing logic)
+    # For similar search, we don't have a text query to boost against
+    # Just use the similarity score directly
+
+    print_results(results, json_output, files_only=False, compact=compact, root=path)
+
+    if not quiet and not json_output:
+        result_word = "result" if len(results) == 1 else "results"
+        err_console.print(f"[dim]{len(results)} similar {result_word}[/]")
+
+
+@app.command()
 def model():
     """Show embedding model status."""
     from huggingface_hub import try_to_load_from_cache
@@ -906,6 +1032,7 @@ Hybrid semantic + keyword code search. Use for conceptual queries.
 - "find database connection code"
 - Conceptual/semantic queries
 - Finding implementations by description
+- Finding code similar to a given file/function
 
 **Use grep/Grep tool:**
 - Exact string matches ("searchForThis")
@@ -923,6 +1050,10 @@ hhg "query" . -l            # Files only (no content)
 hhg "query" . -c            # Compact (no content preview)
 hhg "query" . -t py,rs      # Filter by file type
 hhg "query" . --code-only   # Exclude docs (md, txt, rst)
+
+hhg similar file.py ./path  # Find similar code blocks
+hhg similar file.py:42 .    # Find code similar to block at line 42
+hhg similar file.py -n 5    # Limit to 5 results
 
 hhg build ./path            # Build/update index
 hhg build ./path --force    # Full rebuild
@@ -942,6 +1073,9 @@ hhg "error handling retry logic" ./src
 
 # Find by concept
 hhg "database connection pooling" ./src
+
+# Find similar code
+hhg similar src/auth.py:25 ./src  # Find code like function at line 25
 
 # JSON for programmatic use
 hhg "api endpoints" ./src --json | jq '.[0].file'
@@ -1069,7 +1203,15 @@ def main():
     # Solution: strip path/flags from subcommands and let callback parse saved argv
     argv = sys.argv[1:]  # Skip program name
 
-    if len(argv) >= 1 and argv[0] in ("clean", "build", "list", "status", "model", "skill"):
+    if len(argv) >= 1 and argv[0] in (
+        "clean",
+        "build",
+        "list",
+        "status",
+        "model",
+        "skill",
+        "similar",
+    ):
         # Save original args for callback to parse
         _subcommand_original_argv = argv
         # Just pass subcommand name to typer
