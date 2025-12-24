@@ -58,12 +58,6 @@
 - Add Linux arm64 (aarch64) platform support
 - Build wheels for: macOS arm64, Linux x64, Linux arm64
 
-## v0.0.22 Changes
-
-- Add `hhg skill` command for Claude Code integration
-- `hhg skill` or `hhg skill install` installs skill to ~/.claude/skills/hhg/
-- `hhg skill show` prints skill content to stdout
-
 ## v0.0.21 Changes
 
 - Update omendb to 0.0.12 (bug fixes, subscores API)

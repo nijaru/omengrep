@@ -12,8 +12,9 @@ How it works:
 ```bash
 pixi run build-ext            # Build Mojo scanner extension
 pixi run hhg build ./src      # Build index (required first)
-pixi run hhg "query" ./src    # Hybrid search (requires index)
-pixi run hhg --json "query" . # JSON output for agents
+pixi run hhg "query" ./src    # Semantic search (text query)
+pixi run hhg file.py#func     # Find similar code (by name)
+pixi run hhg file.py:42       # Find similar code (by line)
 pixi run test                 # Run all tests
 ```
 
@@ -65,7 +66,7 @@ hatch_build.py          # Platform wheel hook
 | Python       | >=3.11, <3.14         | CLI + inference            |
 | ONNX Runtime | >=1.16                | Model execution            |
 | Tree-sitter  | >=0.24                | AST parsing (22 languages) |
-| omendb       | >=0.0.10              | Hybrid vector + BM25 DB    |
+| omendb       | >=0.0.14              | Hybrid vector + BM25 DB    |
 | Embeddings   | jina-code-int8        | INT8, 768 dims, ~154MB     |
 
 ## Mojo Patterns

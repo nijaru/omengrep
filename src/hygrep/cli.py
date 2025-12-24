@@ -617,19 +617,6 @@ def search(
             model()
             raise typer.Exit()
 
-    elif query == "skill":
-        # Check if next arg is "show" or "install"
-        args = _subcommand_original_argv[1:] if _subcommand_original_argv else []
-        action = args[0] if args else None
-        if _check_help_flag():
-            console.print(
-                "Usage: hhg skill [install|show]\n\n"
-                "Install Claude Code skill or print skill content."
-            )
-            raise typer.Exit()
-        skill(action=action, path=None)
-        raise typer.Exit()
-
     elif query == "similar":
         # Deprecated: use hhg file#name or hhg file:line instead
         args = _subcommand_original_argv[1:] if _subcommand_original_argv else []
@@ -1080,143 +1067,6 @@ def model_install():
         raise typer.Exit(EXIT_ERROR)
 
 
-# Embedded skill for Claude Code integration
-SKILL_CONTENT = """---
-name: hhg
-description: >
-  Semantic code search. Use for conceptual queries like "find authentication",
-  "where is error handling", "how does X work". Also finds similar code with
-  file#name or file:line syntax. Requires index (auto-builds if HHG_AUTO_BUILD=1).
-allowed-tools: Bash(command:hhg*)
----
-
-# hhg
-
-Hybrid semantic + keyword code search. Use for conceptual queries.
-
-## When to Use
-
-**Use hhg:**
-- "find where authentication is handled"
-- "search for error handling patterns"
-- "how does the API client work"
-- "find database connection code"
-- Conceptual/semantic queries
-- Finding implementations by description
-- Finding code similar to a given file/function
-
-**Use grep/Grep tool:**
-- Exact string matches ("searchForThis")
-- Regex patterns
-- Known function/class names
-- Quick literal searches
-
-## Commands
-
-```bash
-# Semantic search (text queries)
-hhg "query" ./path          # Semantic search (auto-updates stale files)
-hhg "query" ./path -n 20    # More results
-hhg "query" . --json        # JSON output for parsing
-hhg "query" . -l            # Files only (no content)
-hhg "query" . -c            # Compact (no content preview)
-hhg "query" . -t py,rs      # Filter by file type
-hhg "query" . --code-only   # Exclude docs (md, txt, rst)
-
-# Find similar code (file reference)
-hhg file.py#function_name   # Find code similar to function by name
-hhg file.py:42              # Find code similar to block at line 42
-hhg file.py                 # Find code similar to first block
-
-# Index management
-hhg build ./path            # Build/update index
-hhg build ./path --force    # Full rebuild
-hhg status ./path           # Index stats
-hhg clean ./path            # Delete index
-hhg list ./path             # List all indexes under path
-
-# Model management
-hhg model                   # Show model status
-hhg model install           # Download model for offline use
-```
-
-## Patterns
-
-```bash
-# Find implementations
-hhg "user authentication login" ./src
-
-# Find error handling
-hhg "error handling retry logic" ./src
-
-# Find by concept
-hhg "database connection pooling" ./src
-
-# Find similar code (structural patterns)
-hhg src/auth.py#authenticate    # Find functions similar to authenticate
-hhg src/models.py#User          # Find classes similar to User
-hhg src/handlers.py:42          # Find code like block at line 42
-
-# JSON for programmatic use
-hhg "api endpoints" ./src --json | jq '.[0].file'
-```
-
-## Index
-
-- Stored in `.hhg/` at search root
-- Auto-updates stale files on search
-- First search may take ~30s to build index
-- Set `HHG_AUTO_BUILD=1` to auto-build on first search
-
-## Install
-
-```bash
-uv tool install hhg
-# or
-uvx --from hhg hhg "query" ./src
-```
-"""
-
-
-@app.command()
-def skill(
-    action: str = typer.Argument(None, help="Action: install, show"),
-    path: Path = typer.Option(None, "--path", "-p", help="Custom install path"),
-):
-    """Install Claude Code skill.
-
-    Examples:
-        hhg skill              # Install to ~/.claude/skills/hhg/
-        hhg skill install      # Same as above
-        hhg skill show         # Print skill content to stdout
-    """
-    # Default to install
-    if action is None or action == "install":
-        skill_dir = path or Path.home() / ".claude" / "skills" / "hhg"
-        skill_file = skill_dir / "SKILL.md"
-
-        skill_dir.mkdir(parents=True, exist_ok=True)
-        skill_file.write_text(SKILL_CONTENT.strip() + "\n")
-
-        console.print(f"Installed hhg skill to {skill_file}")
-        console.print()
-        console.print("For proactive usage, add to ~/.claude/CLAUDE.md:")
-        console.print()
-        console.print(
-            '  [bold]**Semantic Search:**[/] `hhg "query" ./src` for conceptual code search.'
-        )
-        console.print()
-        console.print("[dim]For other agents: hhg skill show > /path/to/config[/]")
-
-    elif action == "show":
-        print(SKILL_CONTENT.strip())
-
-    else:
-        err_console.print(f"[red]Error:[/] Unknown action: {action}")
-        err_console.print("Usage: hhg skill [install|show]")
-        raise typer.Exit(EXIT_ERROR)
-
-
 _subcommand_original_argv = None
 
 
@@ -1289,7 +1139,6 @@ def main():
         "list",
         "status",
         "model",
-        "skill",
         "similar",
     ):
         # Save original args for callback to parse
