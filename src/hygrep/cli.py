@@ -145,11 +145,41 @@ def build_index(
 
         # Phase 2: Extract and embed
         index = SemanticIndex(root)
+        t0 = time.perf_counter()
 
-        with Status("Indexing...", console=err_console):
-            t0 = time.perf_counter()
-            stats = index.index(files, workers=workers, batch_size=batch_size)
-            index_time = time.perf_counter() - t0
+        # Use progress bar for large builds (50+ files), spinner for small
+        if len(files) >= 50:
+            from rich.progress import (
+                BarColumn,
+                Progress,
+                TaskProgressColumn,
+                TextColumn,
+                TimeElapsedColumn,
+            )
+
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+                console=err_console,
+                transient=True,
+            ) as progress:
+                task = progress.add_task("Extracting...", total=None)
+
+                def on_progress(current: int, total: int, _msg: str) -> None:
+                    if progress.tasks[task].total != total:
+                        progress.update(task, total=total, description="Embedding...")
+                    progress.update(task, completed=current)
+
+                stats = index.index(
+                    files, workers=workers, batch_size=batch_size, on_progress=on_progress
+                )
+        else:
+            with Status("Indexing...", console=err_console):
+                stats = index.index(files, workers=workers, batch_size=batch_size)
+
+        index_time = time.perf_counter() - t0
 
         # Summary: skipped first, then final count
         if stats["skipped"]:
@@ -1018,10 +1048,10 @@ def clean(
         False, "--recursive", "-r", help="Also delete indexes in subdirectories"
     ),
 ):
-    """Delete index."""
+    """Delete index or remove subdir from parent index."""
     import shutil
 
-    from .semantic import SemanticIndex, find_subdir_indexes
+    from .semantic import SemanticIndex, find_parent_index, find_subdir_indexes
 
     path = path.resolve()
     deleted_count = 0
@@ -1032,6 +1062,32 @@ def clean(
         index.clear()
         console.print("[green]✓[/] Deleted ./.hhg/")
         deleted_count += 1
+    else:
+        # Check if this path is part of a parent index
+        parent = find_parent_index(path)
+        if parent:
+            try:
+                rel_prefix = str(path.relative_to(parent))
+                # Don't allow cleaning the parent root via subdir path
+                if not rel_prefix or rel_prefix == ".":
+                    err_console.print(
+                        f"[yellow]Hint:[/] Use 'hhg clean {parent}' to delete the parent index"
+                    )
+                else:
+                    index = SemanticIndex(parent)
+                    stats = index.remove_prefix(rel_prefix)
+                    if stats["blocks"] > 0:
+                        console.print(
+                            f"[green]✓[/] Removed {stats['blocks']} blocks "
+                            f"({stats['files']} files) from parent index"
+                        )
+                        deleted_count += 1
+                    else:
+                        err_console.print(
+                            f"[dim]No blocks found for {rel_prefix} in parent index[/]"
+                        )
+            except ValueError:
+                pass  # path not under parent, shouldn't happen
 
     # Delete subdir indexes if recursive
     if recursive:

@@ -741,6 +741,48 @@ class SemanticIndex:
                 # Final attempt with ignore_errors
                 shutil.rmtree(self.index_dir, ignore_errors=True)
 
+    def remove_prefix(self, prefix: str) -> dict:
+        """Remove all files/blocks matching a path prefix.
+
+        Args:
+            prefix: Relative path prefix (e.g., "src/subdir").
+
+        Returns:
+            Stats dict with files and blocks removed.
+        """
+        # Guard against empty/root prefix which would delete everything
+        prefix = prefix.rstrip("/")
+        if not prefix or prefix == ".":
+            return {"files": 0, "blocks": 0}
+
+        db = self._ensure_db()
+        manifest = self._load_manifest()
+        files = manifest.get("files", {})
+
+        # Find matching files
+        to_remove = []
+        for rel_path in files:
+            if rel_path == prefix or rel_path.startswith(f"{prefix}/"):
+                to_remove.append(rel_path)
+
+        if not to_remove:
+            return {"files": 0, "blocks": 0}
+
+        # Delete blocks
+        blocks_removed = 0
+        for rel_path in to_remove:
+            file_entry = files.get(rel_path, {})
+            block_ids = file_entry.get("blocks", []) if isinstance(file_entry, dict) else []
+            if block_ids:
+                db.delete(block_ids)
+                blocks_removed += len(block_ids)
+            manifest["files"].pop(rel_path, None)
+
+        db.flush()
+        self._save_manifest(manifest)
+
+        return {"files": len(to_remove), "blocks": blocks_removed}
+
     def merge_from_subdir(self, subdir_index_path: Path) -> dict:
         """Merge vectors from a subdirectory index into this one.
 
