@@ -2,96 +2,73 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 25 (similar UX)               | 2025-12-22 |
-| Version   | 0.0.25                        | 2025-12-22 |
+| Phase     | 26 (multi-provider)           | 2026-01-10 |
+| Version   | 0.0.28                        | 2026-01-10 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
 | CLI       | `hhg`                         | 2025-12-16 |
 | Languages | 28 + prose (md, txt, rst)     | 2025-12-16 |
-| Model     | jina-code-int8 (768 dims)     | 2025-12-16 |
-| omendb    | >=0.0.14                      | 2025-12-22 |
+| Model     | jina-code (INT8/FP16)         | 2026-01-10 |
+| omendb    | >=0.0.23                      | 2026-01-10 |
 
-## v0.0.25 Changes
+## v0.0.28 Changes
 
-- **New similar search syntax** - auto-detect file references in main command
-  - `hhg file.py#function_name` - find similar by block name
-  - `hhg file.py:42` - find similar by line number
-  - `hhg file.py` - find similar to first block
-- **Exclude text/doc blocks** from similar results by default
-- **Show similarity percentage** in output (e.g. "65% similar")
-- **Ambiguous name handling** - error with suggestions if name matches multiple blocks
-- **Deprecate** `hhg similar` subcommand (still works with notice)
-- **Change** `model-install` to `hhg model install`
-- **Update** SKILL_CONTENT with new syntax
+- **Upgrade omendb** to 0.0.23 (bug fixes from 0.0.21-0.0.22)
+- **Progress bar** for large builds (50+ files), spinner for small
+- **Partial clean** - `hhg clean ./subdir` removes only that subdir from parent index
+- **Multi-provider support** - auto-detect CUDA/CoreML/CPU
+  - CUDA: Uses FP16 from `jinaai/jina-embeddings-v2-base-code`
+  - CoreML: Would use FP16 (not available in pip packages yet)
+  - CPU: Uses INT8 from `nijaru/jina-code-int8`
+- **Optional CUDA dependency** - `pip install hhg[cuda]` for GPU acceleration
 
-## v0.0.24 Changes
+## Provider Status
 
-- Add `hhg similar` command for finding similar code
-- Update omendb to 0.0.14
+| Platform     | Provider              | Model | Status                    |
+| ------------ | --------------------- | ----- | ------------------------- |
+| Linux + CUDA | CUDAExecutionProvider | FP16  | Works with `hhg[cuda]`    |
+| macOS        | CPUExecutionProvider  | INT8  | Works (CoreML not in pip) |
+| Linux CPU    | CPUExecutionProvider  | INT8  | Works                     |
 
-## v0.0.17 Changes
+## Uncommitted Work
 
-- **Package renamed** `hygrep` → `hhg` (clearer: `install hhg → hhg`)
-- **Embedding model** switched to jina-code-int8 (768 dims, ~154MB, better quality)
-- **Parallel extraction** - multiprocessing for faster builds
-- **`hhg model`** - shows model and provider status
-- **Manifest v5** - requires rebuild from v4 (dimension change)
+Multi-provider embedder changes ready to commit:
 
-## v0.0.18 Changes
+- `embedder.py`: Auto-detect provider, select optimal model
+- `cli.py`: Updated `hhg model` to show provider/model info
+- `pyproject.toml`: Added `[cuda]` optional dependency
 
-- Fix CLI arg ordering (`--exclude` now works after positional args)
-- Add `--code-only` flag to exclude docs (md, txt, rst, adoc)
-- Add 6 new tree-sitter grammars: HTML, CSS, SQL, Julia, HCL/Terraform (28 total)
-- Remove `doctor` command (redundant with `hhg model`)
-- Simplify embedder to CPU-only (GPU providers not stable)
+## Previous Versions
 
-## v0.0.19 Changes
+<details>
+<summary>v0.0.25 - Similar search UX</summary>
 
-- Clean up build output: reorder Found → Merged → Skipped → Cleaned up → Indexed
-- Fix singular grammar ("1 result" not "1 results")
-- Quiet mode (`-q`) suppresses "Running:" prefix
-- Fix Mojo and Python warnings (utcnow deprecation, type hints)
+- `hhg file.py#function_name` - find similar by block name
+- `hhg file.py:42` - find similar by line number
+- Exclude text/doc blocks from similar results
+- Show similarity percentage
+</details>
 
-## v0.0.23 Changes
+<details>
+<summary>v0.0.17-0.0.24</summary>
 
-- Add Linux arm64 (aarch64) platform support
-- Build wheels for: macOS arm64, Linux x64, Linux arm64
-
-## v0.0.21 Changes
-
-- Update omendb to 0.0.12 (bug fixes, subscores API)
-- Fix type annotations to match omendb type stubs
-- Remove unneeded ty ignore rule (omendb now has stubs)
-
-## v0.0.20 Changes
-
-- Add code-aware ranking boosts:
-  - CamelCase/snake_case aware term matching
-  - Exact name match: 2.5x, term overlap: +30% per term
-  - Context-aware type boost: 1.5x if query mentions "class"/"function"
-  - File path relevance: 1.15x
-  - Boost cap at 4x to prevent over-boosting
-
-## Planned
-
-- **Optional cross-encoder reranking** (`--rerank` flag)
-  - Model: jinaai/jina-reranker-v1-tiny-en (33MB)
-  - Rerank top 20-30 results
-  - ~50-80ms overhead
-  - Off by default
-
-- **RRF tuning** (omendb 0.0.12 exposes subscores - can use for custom weighting)
-
-## Open Issues
-
-None currently tracked.
+- Package renamed `hygrep` → `hhg`
+- jina-code-int8 model (768 dims)
+- Parallel extraction, hybrid search
+- Code-aware ranking boosts
+</details>
 
 ## Architecture
 
 ```
 Build:  Scan → Extract (parallel) → Embed (batched) → Store in omendb
 Search: Embed query → Hybrid search (semantic + BM25) → Results
+
+Provider selection:
+  CUDA available? → FP16 from Jina + CUDAExecutionProvider
+  CoreML available? → FP16 from Jina + CoreMLExecutionProvider
+  Otherwise → INT8 from nijaru + CPUExecutionProvider
 ```
 
 ## Key Files
@@ -104,10 +81,7 @@ Search: Embed query → Hybrid search (semantic + BM25) → Results
 | `src/hygrep/extractor.py`   | Tree-sitter code extraction           |
 | `src/scanner/_scanner.mojo` | Fast file scanning (Mojo)             |
 
-## Performance (M3 Max, CPU)
+## Open Issues
 
-| Phase       | Time  | Notes                 |
-| ----------- | ----- | --------------------- |
-| First index | ~31s  | 530 blocks, jina 768d |
-| Cold search | ~0.9s | Model loading         |
-| Warm search | <1ms  | omendb hybrid search  |
+- CoreML not available via pip (third-party packages outdated)
+- Mac builds CPU-only for now (~10 texts/sec)
