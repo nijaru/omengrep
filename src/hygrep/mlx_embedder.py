@@ -127,8 +127,8 @@ class MLXEmbedder:
         # Get approximate token counts (chars / 4 is rough estimate)
         lengths = [(i, len(t) // 4) for i, t in enumerate(texts)]
 
-        # Group by similar lengths (buckets of ~100 tokens)
-        bucket_size = 100
+        # Group by similar lengths (buckets of ~50 tokens for less padding waste)
+        bucket_size = 50
         buckets: dict[int, list[int]] = {}
         for idx, length in lengths:
             bucket = length // bucket_size

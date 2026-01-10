@@ -181,9 +181,16 @@ class SemanticIndex:
 
         # Use global embedder for caching benefits
         self.embedder = get_embedder(cache_dir=cache_dir)
-        self.extractor = ContextExtractor()
+        self._extractor: ContextExtractor | None = None
 
         self._db: "omendb.VectorDatabase | None" = None
+
+    @property
+    def extractor(self) -> ContextExtractor:
+        """Lazy-load extractor (only needed for build, not search)."""
+        if self._extractor is None:
+            self._extractor = ContextExtractor()
+        return self._extractor
 
     def __enter__(self) -> "SemanticIndex":
         """Context manager entry."""
@@ -380,6 +387,8 @@ class SemanticIndex:
             return stats
 
         # 3. Embed and store in batches (sequential)
+        # Sort by text length for better MLX batching (more homogeneous -> less padding)
+        all_blocks.sort(key=lambda b: len(b["text"]))
         total = len(all_blocks)
         for i in range(0, total, batch_size):
             batch = all_blocks[i : i + batch_size]
