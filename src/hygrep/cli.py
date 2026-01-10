@@ -1051,7 +1051,7 @@ def build(
 @app.command(name="list")
 def list_indexes(path: Path = typer.Argument(Path("."), help="Directory to search")):
     """List all indexes under a directory."""
-    from .semantic import SemanticIndex, find_subdir_indexes
+    from .semantic import IndexNeedsRebuild, SemanticIndex, find_subdir_indexes
 
     path = path.resolve()
     indexes = find_subdir_indexes(path, include_root=True)
@@ -1070,8 +1070,11 @@ def list_indexes(path: Path = typer.Argument(Path("."), help="Directory to searc
 
         # Get block count from manifest
         index = SemanticIndex(idx_root)
-        block_count = index.count()
-        console.print(f"  {display_path}/.hhg/ [dim]({block_count} blocks)[/]")
+        try:
+            block_count = index.count()
+            console.print(f"  {display_path}/.hhg/ [dim]({block_count} blocks)[/]")
+        except IndexNeedsRebuild:
+            console.print(f"  {display_path}/.hhg/ [yellow](needs rebuild)[/]")
 
 
 @app.command(context_settings={"allow_interspersed_args": True})
@@ -1084,7 +1087,12 @@ def clean(
     """Delete index or remove subdir from parent index."""
     import shutil
 
-    from .semantic import SemanticIndex, find_parent_index, find_subdir_indexes
+    from .semantic import (
+        IndexNeedsRebuild,
+        SemanticIndex,
+        find_parent_index,
+        find_subdir_indexes,
+    )
 
     path = path.resolve()
     deleted_count = 0
@@ -1108,7 +1116,14 @@ def clean(
                     )
                 else:
                     index = SemanticIndex(parent)
-                    stats = index.remove_prefix(rel_prefix)
+                    try:
+                        stats = index.remove_prefix(rel_prefix)
+                    except IndexNeedsRebuild:
+                        err_console.print(
+                            "[yellow]![/] Parent index needs rebuild. "
+                            f"Run: hhg build --force {parent}"
+                        )
+                        raise typer.Exit(EXIT_ERROR)
                     if stats["blocks"] > 0:
                         console.print(
                             f"[green]✓[/] Removed {stats['blocks']} blocks "
