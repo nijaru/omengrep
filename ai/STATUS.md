@@ -2,44 +2,60 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 26 (multi-provider)           | 2026-01-10 |
+| Phase     | 27 (MLX acceleration)         | 2026-01-10 |
 | Version   | 0.0.28                        | 2026-01-10 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
 | CLI       | `hhg`                         | 2025-12-16 |
 | Languages | 28 + prose (md, txt, rst)     | 2025-12-16 |
-| Model     | jina-code (INT8/FP16)         | 2026-01-10 |
+| Model     | jina-code (MLX/FP16/INT8)     | 2026-01-10 |
 | omendb    | >=0.0.23                      | 2026-01-10 |
 
-## v0.0.28 Changes
+## Current Work: MLX Acceleration
 
-- **Upgrade omendb** to 0.0.23 (bug fixes from 0.0.21-0.0.22)
-- **Progress bar** for large builds (50+ files), spinner for small
-- **Partial clean** - `hhg clean ./subdir` removes only that subdir from parent index
-- **Multi-provider support** - auto-detect CUDA/CoreML/CPU
-  - CUDA: Uses FP16 from `jinaai/jina-embeddings-v2-base-code`
-  - CoreML: Would use FP16 (not available in pip packages yet)
-  - CPU: Uses INT8 from `nijaru/jina-code-int8`
-- **Optional CUDA dependency** - `pip install hhg[cuda]` for GPU acceleration
+Adding MLX backend for Apple Silicon to get ~50x speedup over CPU.
 
-## Provider Status
+### Target Architecture
 
-| Platform     | Provider              | Model | Status                    |
-| ------------ | --------------------- | ----- | ------------------------- |
-| Linux + CUDA | CUDAExecutionProvider | FP16  | Works with `hhg[cuda]`    |
-| macOS        | CPUExecutionProvider  | INT8  | Works (CoreML not in pip) |
-| Linux CPU    | CPUExecutionProvider  | INT8  | Works                     |
+| Platform      | Backend               | Model Source                          | Expected Speed   |
+| ------------- | --------------------- | ------------------------------------- | ---------------- |
+| Apple Silicon | MLX (custom JinaBERT) | jina-code safetensors                 | ~2000+ texts/sec |
+| Linux + CUDA  | ONNX FP16             | `jinaai/jina-embeddings-v2-base-code` | ~500+ texts/sec  |
+| Linux + ROCm  | ONNX FP16             | Same as CUDA                          | TBD              |
+| CPU fallback  | ONNX INT8             | `nijaru/jina-code-int8`               | ~230 texts/sec   |
 
-## Uncommitted Work
+### Why Custom JinaBERT?
 
-Multi-provider embedder changes ready to commit:
+jina-code uses JinaBERT architecture (not standard BERT):
 
-- `embedder.py`: Auto-detect provider, select optimal model
-- `cli.py`: Updated `hhg model` to show provider/model info
-- `pyproject.toml`: Added `[cuda]` optional dependency
+- ALiBi positional encoding (enables 8K context)
+- Gated MLPs (GLU-style)
+- LayerNorm on Q and K in attention
+- Pre-norm architecture
+
+Standard MLX BERT implementations don't support this. Need ~200 lines of custom code.
+
+### Research Completed
+
+- [BGE vs jina-code comparison](research/bge-vs-jina-code.md) - jina-code wins for code search
+- [ONNX model format research](research/onnx-model-format-crossplatform.md) - FP16 for GPU, INT8 for CPU
+
+## Tasks
+
+See `tk ls` for current implementation tasks.
 
 ## Previous Versions
+
+<details>
+<summary>v0.0.28 - Multi-provider support</summary>
+
+- Upgrade omendb to 0.0.23
+- Progress bar for large builds (50+ files)
+- Partial clean - `hhg clean ./subdir`
+- Multi-provider ONNX detection (CUDA/CPU)
+- Optional CUDA dependency - `pip install hhg[cuda]`
+</details>
 
 <details>
 <summary>v0.0.25 - Similar search UX</summary>
@@ -65,23 +81,25 @@ Multi-provider embedder changes ready to commit:
 Build:  Scan → Extract (parallel) → Embed (batched) → Store in omendb
 Search: Embed query → Hybrid search (semantic + BM25) → Results
 
-Provider selection:
-  CUDA available? → FP16 from Jina + CUDAExecutionProvider
-  CoreML available? → FP16 from Jina + CoreMLExecutionProvider
-  Otherwise → INT8 from nijaru + CPUExecutionProvider
+Backend selection (auto-detect):
+  macOS + MLX available? → MLX with JinaBERT (Metal GPU)
+  CUDAExecutionProvider? → ONNX FP16 (tensor cores)
+  ROCmExecutionProvider? → ONNX FP16 (AMD GPU)
+  Otherwise → ONNX INT8 (CPU optimized)
 ```
 
 ## Key Files
 
-| File                        | Purpose                               |
-| --------------------------- | ------------------------------------- |
-| `src/hygrep/cli.py`         | CLI, subcommand handling              |
-| `src/hygrep/embedder.py`    | ONNX embeddings, provider detection   |
-| `src/hygrep/semantic.py`    | Index management, parallel extraction |
-| `src/hygrep/extractor.py`   | Tree-sitter code extraction           |
-| `src/scanner/_scanner.mojo` | Fast file scanning (Mojo)             |
+| File                         | Purpose                                   |
+| ---------------------------- | ----------------------------------------- |
+| `src/hygrep/cli.py`          | CLI, subcommand handling                  |
+| `src/hygrep/embedder.py`     | ONNX embeddings, provider detection       |
+| `src/hygrep/mlx_embedder.py` | MLX embeddings (to be created)            |
+| `src/hygrep/mlx_jinabert.py` | JinaBERT MLX architecture (to be created) |
+| `src/hygrep/semantic.py`     | Index management, parallel extraction     |
+| `src/hygrep/extractor.py`    | Tree-sitter code extraction               |
+| `src/scanner/_scanner.mojo`  | Fast file scanning (Mojo)                 |
 
 ## Open Issues
 
-- CoreML not available via pip (third-party packages outdated)
-- Mac builds CPU-only for now (~10 texts/sec)
+- AMD ROCm needs testing (should work with existing ONNX FP16)
