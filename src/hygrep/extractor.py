@@ -625,10 +625,10 @@ class ContextExtractor:
                 return []
 
         _, ext = os.path.splitext(file_path)
-        ext_lower = ext.lower()
+        ext = ext.lower()
 
         # Handle text/doc files with paragraph-based extraction
-        if ext_lower in TEXT_EXTENSIONS:
+        if ext in TEXT_EXTENSIONS:
             blocks = self._extract_text_blocks(file_path, content)
             if blocks:
                 return blocks

@@ -5,6 +5,8 @@ import threading
 
 import numpy as np
 
+from .embedder import DIMENSIONS, MAX_LENGTH, MODEL_REPO
+
 logger = logging.getLogger(__name__)
 
 # MLX imports deferred for platform compatibility
@@ -16,10 +18,8 @@ try:
 except ImportError:
     MLX_AVAILABLE = False
 
-MODEL_ID = "Alibaba-NLP/gte-modernbert-base"
-DIMENSIONS = 768
-MAX_LENGTH = 512
-BATCH_SIZE = 64  # MLX can handle larger batches on Metal
+# MLX batch size (larger than ONNX due to Metal efficiency)
+BATCH_SIZE = 64
 
 
 class MLXEmbedder:
@@ -51,7 +51,7 @@ class MLXEmbedder:
         with self._lock:
             if self._model is not None:
                 return
-            self._model, self._tokenizer_wrapper = load(MODEL_ID)
+            self._model, self._tokenizer_wrapper = load(MODEL_REPO)
             # Access underlying tokenizer - check for API changes
             if not hasattr(self._tokenizer_wrapper, "_tokenizer"):
                 raise RuntimeError(

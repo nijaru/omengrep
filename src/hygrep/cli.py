@@ -7,6 +7,7 @@ For grep, use ripgrep. For semantic understanding, use hhg.
 import json
 import os
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 import typer
@@ -14,6 +15,7 @@ from rich.console import Console
 from rich.status import Status
 
 from . import __version__
+from .semantic import INDEX_DIR, find_index_root
 
 # Consoles
 console = Console()
@@ -23,9 +25,6 @@ err_console = Console(stderr=True)
 EXIT_MATCH = 0
 EXIT_NO_MATCH = 1
 EXIT_ERROR = 2
-
-# Index directory
-INDEX_DIR = ".hhg"
 
 
 app = typer.Typer(
@@ -44,17 +43,6 @@ app = typer.Typer(
 def get_index_path(root: Path) -> Path:
     """Get the index directory path."""
     return root.resolve() / INDEX_DIR
-
-
-def find_index(search_path: Path) -> tuple[Path, Path | None]:
-    """Find existing index by walking up directory tree.
-
-    Returns:
-        Tuple of (index_root, existing_index_dir or None).
-    """
-    from .semantic import find_index_root
-
-    return find_index_root(search_path)
 
 
 def index_exists(root: Path) -> bool:
@@ -412,19 +400,12 @@ def print_results(
 
     # Files-only mode
     if files_only:
-        seen = set()
+        unique_files = list(dict.fromkeys(r["file"] for r in results))
         if json_output:
-            files = []
-            for r in results:
-                if r["file"] not in seen:
-                    files.append(r["file"])
-                    seen.add(r["file"])
-            print(json.dumps(files))
+            print(json.dumps(unique_files))
         else:
-            for r in results:
-                if r["file"] not in seen:
-                    console.print(f"[cyan]{r['file']}[/]")
-                    seen.add(r["file"])
+            for f in unique_files:
+                console.print(f"[cyan]{f}[/]")
         return
 
     if json_output:
@@ -479,7 +460,7 @@ def _run_similar_search(
 
     # Find index by walking up from the file's directory
     file_dir = Path(file_path).parent
-    index_root, existing_index = find_index(file_dir)
+    index_root, existing_index = find_index_root(file_dir)
 
     if existing_index is None:
         err_console.print("[red]Error:[/] No index found. Run 'hhg build' first.")
@@ -494,11 +475,12 @@ def _run_similar_search(
         ref_desc = Path(file_path).name
 
     try:
-        if not quiet:
-            with Status(f"Finding similar to {ref_desc}...", console=err_console):
-                index = SemanticIndex(index_root)
-                results = index.find_similar(file_path, line=line, name=name, k=n)
-        else:
+        ctx = (
+            nullcontext()
+            if quiet
+            else Status(f"Finding similar to {ref_desc}...", console=err_console)
+        )
+        with ctx:
             index = SemanticIndex(index_root)
             results = index.find_similar(file_path, line=line, name=name, k=n)
     except BlockNotFoundError as e:
@@ -752,7 +734,7 @@ def search(
         raise typer.Exit(EXIT_ERROR)
 
     # Walk up to find existing index, or determine where to create one
-    index_root, existing_index = find_index(path)
+    index_root, existing_index = find_index_root(path)
     search_path = path  # May be a subdir of index_root
 
     # Check if index exists
@@ -806,12 +788,8 @@ def search(
         index.close()
 
     # Run semantic search
-    if not quiet:
-        with Status(f"Searching for: {query}...", console=err_console):
-            t0 = time.perf_counter()
-            results = semantic_search(query, search_path, index_root, n=n, threshold=threshold)
-            search_time = time.perf_counter() - t0
-    else:
+    ctx = nullcontext() if quiet else Status(f"Searching for: {query}...", console=err_console)
+    with ctx:
         t0 = time.perf_counter()
         results = semantic_search(query, search_path, index_root, n=n, threshold=threshold)
         search_time = time.perf_counter() - t0
