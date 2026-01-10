@@ -36,6 +36,12 @@ class BlockNotFoundError(Exception):
     pass
 
 
+class IndexNeedsRebuild(Exception):
+    """Raised when the index needs to be rebuilt."""
+
+    pass
+
+
 def _extract_blocks_worker(file_path: str, content: str, rel_path: str) -> list[dict]:
     """Worker to extract blocks from a single file."""
     try:
@@ -249,20 +255,10 @@ class SemanticIndex:
             files = data.get("files", {})
 
             # v5 -> v6: model changed from jina-code to gte-modernbert
+            # v4 -> v5: embedding model changed (256 -> 768 dims)
             # Requires full rebuild - embeddings are incompatible
             if version < 6 and files:
-                raise RuntimeError(
-                    "Index was built with jina-code model (v5).\n"
-                    "New model (gte-modernbert-base) requires rebuild: hhg build --force"
-                )
-
-            # v4 -> v5: embedding model changed (256 -> 768 dims)
-            # Requires full rebuild - old embeddings are incompatible
-            if version < 5 and files:
-                raise RuntimeError(
-                    "Index was built with an older embedding model.\n"
-                    "Rebuild with: hhg build --force"
-                )
+                raise IndexNeedsRebuild()
 
             # Migrate v1 -> v2: hash string -> dict
             if version < 2:
@@ -292,10 +288,7 @@ class SemanticIndex:
             # Validate model version matches - different models produce incompatible embeddings
             stored_model = data.get("model")
             if stored_model and stored_model != MODEL_VERSION and files:
-                raise RuntimeError(
-                    f"Index was built with model '{stored_model}'.\n"
-                    f"Current model ({MODEL_VERSION}) requires rebuild: hhg build --force"
-                )
+                raise IndexNeedsRebuild()
 
             # Ensure model version is set for v6+
             if "model" not in data:

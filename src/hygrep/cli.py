@@ -51,6 +51,28 @@ def index_exists(root: Path) -> bool:
     return (index_path / "manifest.json").exists()
 
 
+def _handle_index_needs_rebuild(index_root: Path, quiet: bool = False) -> bool:
+    """Handle IndexNeedsRebuild by prompting user to rebuild.
+
+    Returns True if rebuild was performed, False if user declined.
+    """
+    if quiet:
+        err_console.print("[red]Index needs rebuild.[/] Run: hhg build --force")
+        return False
+
+    err_console.print("[yellow]Index needs rebuild.[/]")
+    try:
+        response = input("Rebuild now? [Y/n] ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        err_console.print()
+        return False
+
+    if response in ("", "y", "yes"):
+        build_index(index_root, quiet=quiet, force=True)
+        return True
+    return False
+
+
 def parse_file_reference(query: str) -> tuple[str, int | None, str | None] | None:
     """Parse file reference from query if it looks like file#name or file:line.
 
@@ -454,7 +476,12 @@ def _run_similar_search(
     quiet: bool = False,
 ) -> None:
     """Run similar search for a file reference."""
-    from .semantic import AmbiguousBlockError, BlockNotFoundError, SemanticIndex
+    from .semantic import (
+        AmbiguousBlockError,
+        BlockNotFoundError,
+        IndexNeedsRebuild,
+        SemanticIndex,
+    )
 
     file_path = str(Path(file_path).resolve())
 
@@ -483,6 +510,12 @@ def _run_similar_search(
         with ctx:
             index = SemanticIndex(index_root)
             results = index.find_similar(file_path, line=line, name=name, k=n)
+    except IndexNeedsRebuild:
+        if _handle_index_needs_rebuild(index_root, quiet=quiet):
+            index = SemanticIndex(index_root)
+            results = index.find_similar(file_path, line=line, name=name, k=n)
+        else:
+            raise typer.Exit(EXIT_ERROR)
     except BlockNotFoundError as e:
         err_console.print(f"[red]Error:[/] {e}")
         raise typer.Exit(EXIT_ERROR)
@@ -755,13 +788,19 @@ def search(
     if not no_index:
         # Found existing index - check for stale files and auto-update
         from .scanner import scan
-        from .semantic import SemanticIndex
+        from .semantic import IndexNeedsRebuild, SemanticIndex
 
         if not quiet and index_root != search_path:
             err_console.print(f"[dim]Using index at {index_root}[/]")
 
         files = scan(str(index_root), ".", include_hidden=False)
-        index = SemanticIndex(index_root)
+        try:
+            index = SemanticIndex(index_root)
+        except IndexNeedsRebuild:
+            if _handle_index_needs_rebuild(index_root, quiet=quiet):
+                index = SemanticIndex(index_root)
+            else:
+                raise typer.Exit(EXIT_ERROR)
         try:
             stale_count = index.needs_update(files)
 
