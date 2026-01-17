@@ -31,7 +31,7 @@ Switched from gte-modernbert-base (150M, 768 dims) to snowflake-arctic-embed-s (
 2. **Pooling**: CLS token (was mean pooling)
 3. **Query prefix**: Added for optimal retrieval
 4. **Manifest**: Version 7, requires rebuild from v6
-5. **MLX**: Temporarily disabled (pooling incompatibility)
+5. **MLX**: Re-enabled with CLS pooling (uses strict=False for missing pooler weights)
 
 ### Breaking Change
 
@@ -42,7 +42,6 @@ Model switch requires index rebuild:
 
 ## Pending
 
-- Re-enable MLX with CLS pooling implementation (tk-7wfk)
 - Benchmark actual build time improvement on real codebase
 
 ## Architecture
@@ -51,9 +50,9 @@ Model switch requires index rebuild:
 Build:  Scan → Extract (parallel) → Embed (batched) → Store in omendb
 Search: Embed query (with prefix) → Hybrid search (semantic + BM25) → Results
 
-Backend selection (current):
-  ONNX INT8 (CPU) - all platforms
-  MLX disabled pending CLS pooling fix
+Backend selection (auto-detected):
+  MLX (Metal GPU) - macOS Apple Silicon
+  ONNX INT8 (CPU) - all other platforms
 ```
 
 ## Key Files
@@ -62,7 +61,7 @@ Backend selection (current):
 | ---------------------------- | ------------------------------------- |
 | `src/hygrep/cli.py`          | CLI, subcommand handling              |
 | `src/hygrep/embedder.py`     | ONNX embeddings, CLS pooling          |
-| `src/hygrep/mlx_embedder.py` | MLX embeddings (disabled)             |
+| `src/hygrep/mlx_embedder.py` | MLX embeddings (Apple Silicon)        |
 | `src/hygrep/semantic.py`     | Index management, parallel extraction |
 | `src/hygrep/extractor.py`    | Tree-sitter code extraction           |
 | `src/scanner/_scanner.mojo`  | Fast file scanning (Mojo)             |

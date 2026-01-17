@@ -5,14 +5,16 @@ import threading
 
 import numpy as np
 
-from .embedder import DIMENSIONS, MAX_LENGTH, MODEL_REPO
+from .embedder import DIMENSIONS, MAX_LENGTH, MODEL_REPO, QUERY_PREFIX
 
 logger = logging.getLogger(__name__)
 
 # MLX imports deferred for platform compatibility
 try:
     import mlx.core as mx
-    from mlx_embeddings import load
+    import mlx.nn as nn
+    from mlx_embeddings.tokenizer_utils import load_tokenizer
+    from mlx_embeddings.utils import get_model_path, load_model
 
     MLX_AVAILABLE = True
 except ImportError:
@@ -20,6 +22,31 @@ except ImportError:
 
 # MLX batch size (larger than ONNX due to Metal efficiency)
 BATCH_SIZE = 64
+
+
+def _load_model_relaxed(path_or_hf_repo: str):
+    """Load model with strict=False to handle models without pooler layer.
+
+    snowflake-arctic-embed-s doesn't include pooler weights (trained with
+    add_pooling_layer=False), but the BERT model class expects them.
+    Using strict=False allows loading without the pooler weights.
+    """
+    model_path = get_model_path(path_or_hf_repo)
+
+    # Load model normally but patch load_weights to use strict=False
+    original_load_weights = nn.Module.load_weights
+
+    def load_weights_relaxed(self, file_or_weights, strict=True):
+        return original_load_weights(self, file_or_weights, strict=False)
+
+    nn.Module.load_weights = load_weights_relaxed
+    try:
+        model = load_model(model_path, lazy=False, path_to_repo=path_or_hf_repo)
+    finally:
+        nn.Module.load_weights = original_load_weights
+
+    tokenizer = load_tokenizer(model_path)
+    return model, tokenizer
 
 
 class MLXEmbedder:
@@ -51,7 +78,7 @@ class MLXEmbedder:
         with self._lock:
             if self._model is not None:
                 return
-            self._model, self._tokenizer_wrapper = load(MODEL_REPO)
+            self._model, self._tokenizer_wrapper = _load_model_relaxed(MODEL_REPO)
             # Access underlying tokenizer - check for API changes
             if not hasattr(self._tokenizer_wrapper, "_tokenizer"):
                 raise RuntimeError(
@@ -61,7 +88,7 @@ class MLXEmbedder:
             self._tokenizer = self._tokenizer_wrapper._tokenizer
 
     def _embed_one(self, text: str) -> np.ndarray:
-        """Generate embedding for a single text."""
+        """Generate embedding for a single text using CLS pooling."""
         # Tokenize
         encoded = self._tokenizer(
             [text],
@@ -78,8 +105,8 @@ class MLXEmbedder:
         # Run model
         outputs = self._model(input_ids, attention_mask=attention_mask)
 
-        # Get sentence embedding and normalize
-        embedding = np.array(outputs.text_embeds[0])
+        # CLS pooling - take first token (snowflake-arctic-embed uses CLS)
+        embedding = np.array(outputs.last_hidden_state[0, 0, :])
         norm = np.linalg.norm(embedding)
         if norm > 1e-9:
             embedding = embedding / norm
@@ -87,7 +114,7 @@ class MLXEmbedder:
         return embedding.astype(np.float32)
 
     def _embed_batch_safe(self, texts: list[str]) -> np.ndarray:
-        """Generate embeddings for texts of similar length."""
+        """Generate embeddings for texts of similar length using CLS pooling."""
         # Tokenize using transformers tokenizer
         encoded = self._tokenizer(
             texts,
@@ -104,8 +131,8 @@ class MLXEmbedder:
         # Run model
         outputs = self._model(input_ids, attention_mask=attention_mask)
 
-        # Get sentence embeddings
-        embeddings = np.array(outputs.text_embeds)
+        # CLS pooling - take first token (snowflake-arctic-embed uses CLS)
+        embeddings = np.array(outputs.last_hidden_state[:, 0, :])
 
         # L2 normalize
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -189,7 +216,9 @@ class MLXEmbedder:
         if use_cache and text in self._query_cache:
             return self._query_cache[text]
 
-        embedding = self._embed_batch([text])[0]
+        # Add query prefix for better retrieval (snowflake-arctic-embed)
+        prefixed_text = QUERY_PREFIX + text
+        embedding = self._embed_batch([prefixed_text])[0]
 
         if use_cache:
             if len(self._query_cache) >= 128:

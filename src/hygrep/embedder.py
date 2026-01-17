@@ -63,10 +63,18 @@ def _get_best_provider_and_model() -> tuple[list[str], str]:
     )
 
 
-# MLX disabled for snowflake-arctic-embed-s
-# mlx-embeddings uses mean pooling for BERT, but we need CLS pooling
-# TODO: Re-enable once mlx-embeddings supports CLS pooling or we implement it
+# MLX backend for Apple Silicon (uses Metal GPU)
+# Requires: pip install mlx mlx-embeddings
 _MLX_AVAILABLE = False
+try:
+    import platform
+
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        from .mlx_embedder import MLX_AVAILABLE, MLXEmbedder
+
+        _MLX_AVAILABLE = MLX_AVAILABLE
+except ImportError:
+    pass
 
 # Global embedder instance for caching across calls (useful for library usage)
 _global_embedder: "Embedder | None" = None
