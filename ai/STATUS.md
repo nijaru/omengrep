@@ -2,7 +2,7 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Phase     | 29 (snowflake model upgrade)  | 2026-01-17 |
+| Phase     | 30 (code quality refactor)    | 2026-01-17 |
 | Version   | 0.0.29-dev                    | 2026-01-17 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
@@ -12,37 +12,28 @@
 | Model     | snowflake-arctic-embed-s      | 2026-01-17 |
 | omendb    | >=0.0.23                      | 2026-01-10 |
 
-## Completed: Snowflake Model Upgrade
+## Completed: Code Quality Refactor
 
-Switched from gte-modernbert-base (150M, 768 dims) to snowflake-arctic-embed-s (33M, 384 dims) based on ViDoRe V3 benchmark analysis.
+Addressed all findings from parallel review/refactor/profile analysis.
 
-### Performance Improvements
+### Changes
 
-| Metric            | Before (gte-modernbert) | After (snowflake) | Change       |
-| ----------------- | ----------------------- | ----------------- | ------------ |
-| Model size (INT8) | 150MB                   | 34MB              | 4.4x smaller |
-| Parameters        | 150M                    | 33M               | 4.5x fewer   |
-| Vector dims       | 768                     | 384               | 2x smaller   |
-| Batch size        | 32                      | 64                | 2x larger    |
+1. **Thread safety**: Module-level lock for MLX monkey-patching
+2. **Type safety**: Added `EmbedderProtocol` with `@runtime_checkable`
+3. **Circular import fix**: Extracted `_common.py` with shared constants
+4. **Debug logging**: MLX import failures now logged (was silent)
+5. **Constants**: Extracted `QUERY_CACHE_MAX_SIZE = 128`
+6. **Method decomposition**: Split `_ensure_loaded()` into focused methods
+7. **Normalization**: Fixed inconsistency in `MLXEmbedder._embed_one()`
 
-### Key Changes
+### Benchmark Results
 
-1. **Model**: snowflake-arctic-embed-s (competitive with 100M+ models on ViDoRe V3)
-2. **Pooling**: CLS token (was mean pooling)
-3. **Query prefix**: Added for optimal retrieval
-4. **Manifest**: Version 7, requires rebuild from v6
-5. **MLX**: Re-enabled with CLS pooling (uses strict=False for missing pooler weights)
+| Model                     | Backend  | Build Time | Relative     |
+| ------------------------- | -------- | ---------- | ------------ |
+| gte-modernbert-base (old) | ONNX CPU | 10.66s     | 1.43x slower |
+| snowflake-arctic-embed-s  | MLX GPU  | 7.48s      | baseline     |
 
-### Breaking Change
-
-Model switch requires index rebuild:
-
-- Old indexes (v6) prompt: "Rebuild with: hhg build --force"
-- CLI handles gracefully with "Rebuild now? [Y/n]" prompt
-
-## Pending
-
-- Benchmark actual build time improvement on real codebase
+MLX is 2.57x faster than ONNX (667 vs 259 texts/sec).
 
 ## Architecture
 
@@ -53,19 +44,24 @@ Search: Embed query (with prefix) → Hybrid search (semantic + BM25) → Result
 Backend selection (auto-detected):
   MLX (Metal GPU) - macOS Apple Silicon
   ONNX INT8 (CPU) - all other platforms
+
+Module structure:
+  _common.py      - Shared constants, evict_cache()
+  embedder.py     - ONNX backend, EmbedderProtocol, get_embedder()
+  mlx_embedder.py - MLX backend with CLS pooling
 ```
 
 ## Key Files
 
 | File                         | Purpose                               |
 | ---------------------------- | ------------------------------------- |
-| `src/hygrep/cli.py`          | CLI, subcommand handling              |
-| `src/hygrep/embedder.py`     | ONNX embeddings, CLS pooling          |
+| `src/hygrep/_common.py`      | Shared constants and utilities        |
+| `src/hygrep/embedder.py`     | ONNX embeddings, protocol, factory    |
 | `src/hygrep/mlx_embedder.py` | MLX embeddings (Apple Silicon)        |
+| `src/hygrep/cli.py`          | CLI, subcommand handling              |
 | `src/hygrep/semantic.py`     | Index management, parallel extraction |
-| `src/hygrep/extractor.py`    | Tree-sitter code extraction           |
-| `src/scanner/_scanner.mojo`  | Fast file scanning (Mojo)             |
 
-## Research
+## Research & Reviews
 
-- `ai/research/vidore-v3-embedding-analysis.md` - Model comparison and ColBERT analysis
+- `ai/research/vidore-v3-embedding-analysis.md` - Model comparison
+- `ai/review/mlx-embedder-profile-2026-01-17.md` - Performance analysis
