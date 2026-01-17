@@ -6,12 +6,12 @@ import threading
 import numpy as np
 
 from ._common import (
-    DIMENSIONS,
+    BATCH_SIZE,
     MAX_LENGTH,
     MODEL_REPO,
-    QUERY_CACHE_MAX_SIZE,
-    QUERY_PREFIX,
-    evict_cache,
+    batch_embed,
+    cached_embed_one,
+    l2_normalize,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,9 +26,6 @@ try:
     MLX_AVAILABLE = True
 except ImportError:
     MLX_AVAILABLE = False
-
-# MLX batch size (larger than ONNX due to Metal efficiency)
-BATCH_SIZE = 64
 
 # Module-level lock for thread-safe model loading with monkey-patching
 _model_load_lock = threading.Lock()
@@ -119,11 +116,7 @@ class MLXEmbedder:
         # CLS pooling - take first token (snowflake-arctic-embed uses CLS)
         embedding = np.array(outputs.last_hidden_state[0, 0, :])
 
-        # L2 normalize (consistent with _embed_batch_safe)
-        norm = np.linalg.norm(embedding, keepdims=True)
-        embedding = embedding / np.maximum(norm, 1e-9)
-
-        return embedding.astype(np.float32)
+        return l2_normalize(embedding).astype(np.float32)
 
     def _embed_batch_safe(self, texts: list[str]) -> np.ndarray:
         """Generate embeddings for texts of similar length using CLS pooling."""
@@ -143,51 +136,29 @@ class MLXEmbedder:
         # CLS pooling - take first token (snowflake-arctic-embed uses CLS)
         embeddings = np.array(outputs.last_hidden_state[:, 0, :])
 
-        # L2 normalize
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        embeddings = embeddings / np.maximum(norms, 1e-9)
-
-        return embeddings.astype(np.float32)
+        return l2_normalize(embeddings).astype(np.float32)
 
     def _embed_batch(self, texts: list[str]) -> np.ndarray:
         """Generate embeddings for a batch of texts.
 
-        Groups texts by similar token length to avoid MLX batching bug
-        that causes NaN when texts have very different lengths.
+        Note: semantic.py pre-sorts texts by length before calling embed(),
+        so internal bucketing is unnecessary with snowflake-arctic-embed-s.
         """
         self._ensure_loaded()
 
         if len(texts) == 1:
             return np.array([self._embed_one(texts[0])])
 
-        # Get approximate token counts (chars / 4 is rough estimate)
-        lengths = [(i, len(t) // 4) for i, t in enumerate(texts)]
-
-        # Group by similar lengths (buckets of ~50 tokens for less padding waste)
-        bucket_size = 50
-        buckets: dict[int, list[int]] = {}
-        for idx, length in lengths:
-            bucket = length // bucket_size
-            buckets.setdefault(bucket, []).append(idx)
-
-        # Process each bucket
-        results: list[np.ndarray | None] = [None] * len(texts)
-        for bucket_indices in buckets.values():
-            bucket_texts = [texts[i] for i in bucket_indices]
-            try:
-                embeddings = self._embed_batch_safe(bucket_texts)
-                # Check for NaN - fall back to individual if needed
-                if np.isnan(embeddings).any():
-                    logger.debug("NaN in batch embeddings, falling back to individual")
-                    embeddings = np.array([self._embed_one(t) for t in bucket_texts])
-            except Exception as e:
-                logger.debug("Batch embedding failed (%s), falling back to individual", e)
-                embeddings = np.array([self._embed_one(t) for t in bucket_texts])
-
-            for j, idx in enumerate(bucket_indices):
-                results[idx] = embeddings[j]
-
-        return np.array(results)
+        try:
+            embeddings = self._embed_batch_safe(texts)
+            # Safety check for NaN (shouldn't occur with snowflake model)
+            if np.isnan(embeddings).any():
+                logger.debug("NaN in batch embeddings, falling back to individual")
+                return np.array([self._embed_one(t) for t in texts])
+            return embeddings
+        except Exception as e:
+            logger.debug("Batch embedding failed (%s), falling back to individual", e)
+            return np.array([self._embed_one(t) for t in texts])
 
     def embed(self, texts: list[str]) -> np.ndarray:
         """Generate embeddings for documents (for indexing).
@@ -198,17 +169,7 @@ class MLXEmbedder:
         Returns:
             numpy array of shape (len(texts), DIMENSIONS) with normalized embeddings.
         """
-        if not texts:
-            return np.array([], dtype=np.float32).reshape(0, DIMENSIONS)
-
-        self._ensure_loaded()
-
-        all_embeddings = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            all_embeddings.append(self._embed_batch(batch))
-
-        return np.vstack(all_embeddings)
+        return batch_embed(texts, self.batch_size, self._embed_batch, self._ensure_loaded)
 
     def embed_one(self, text: str, use_cache: bool = True) -> np.ndarray:
         """Embed a single query string (for search).
@@ -220,15 +181,4 @@ class MLXEmbedder:
         Returns:
             Normalized embedding vector of shape (DIMENSIONS,).
         """
-        if use_cache and text in self._query_cache:
-            return self._query_cache[text]
-
-        prefixed_text = QUERY_PREFIX + text
-        embedding = self._embed_batch([prefixed_text])[0]
-
-        if use_cache:
-            if len(self._query_cache) >= QUERY_CACHE_MAX_SIZE:
-                evict_cache(self._query_cache)
-            self._query_cache[text] = embedding
-
-        return embedding
+        return cached_embed_one(text, self._query_cache, self._embed_batch, use_cache)

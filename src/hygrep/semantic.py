@@ -2,10 +2,13 @@
 
 import hashlib
 import json
+import logging
 import multiprocessing
 import os
 from collections.abc import Callable
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 import omendb
 
@@ -59,8 +62,9 @@ def _extract_blocks_worker(file_path: str, content: str, rel_path: str) -> list[
                 }
             )
         return output_blocks
-    except Exception:
-        return []  # Return empty list on error
+    except Exception as e:
+        logger.debug("Block extraction failed for %s: %s", file_path, e)
+        return []
 
 
 def find_index_root(search_path: Path) -> tuple[Path, Path | None]:
@@ -842,7 +846,7 @@ class SemanticIndex:
 
         subdir_manifest = json.loads(subdir_manifest_path.read_text())
 
-        # Check version compatibility (v6+ = gte-modernbert-base)
+        # Check version compatibility (v7+ = snowflake-arctic-embed-s)
         subdir_version = subdir_manifest.get("version", 1)
         if subdir_version < MANIFEST_VERSION:
             return {"merged": 0, "error": "incompatible version"}

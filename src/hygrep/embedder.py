@@ -19,9 +19,10 @@ from ._common import (
     MODEL_REPO,
     MODEL_VERSION,
     QUERY_CACHE_MAX_SIZE,
-    QUERY_PREFIX,
     TOKENIZER_FILE,
-    evict_cache,
+    batch_embed,
+    cached_embed_one,
+    l2_normalize,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,18 @@ class EmbedderProtocol(Protocol):
         ...
 
 
+# Provider priority: (primary, fallbacks, model_file)
+_PROVIDER_CONFIGS = [
+    (
+        "TensorrtExecutionProvider",
+        ["CUDAExecutionProvider", "CPUExecutionProvider"],
+        MODEL_FILE_FP16,
+    ),
+    ("CUDAExecutionProvider", ["CPUExecutionProvider"], MODEL_FILE_FP16),
+    ("MIGraphXExecutionProvider", ["CPUExecutionProvider"], MODEL_FILE_FP16),
+]
+
+
 def _get_best_provider_and_model() -> tuple[list[str], str]:
     """Detect best available provider and matching model file.
 
@@ -90,32 +103,12 @@ def _get_best_provider_and_model() -> tuple[list[str], str]:
     """
     available = set(ort.get_available_providers())
 
-    # TensorRT on NVIDIA - fastest for CUDA
-    if "TensorrtExecutionProvider" in available:
-        return (
-            ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"],
-            MODEL_FILE_FP16,
-        )
-
-    # CUDA on Linux - use FP16 for tensor core acceleration
-    if "CUDAExecutionProvider" in available:
-        return (
-            ["CUDAExecutionProvider", "CPUExecutionProvider"],
-            MODEL_FILE_FP16,
-        )
-
-    # MIGraphX on AMD - use FP16
-    if "MIGraphXExecutionProvider" in available:
-        return (
-            ["MIGraphXExecutionProvider", "CPUExecutionProvider"],
-            MODEL_FILE_FP16,
-        )
+    for primary, fallbacks, model_file in _PROVIDER_CONFIGS:
+        if primary in available:
+            return [primary, *fallbacks], model_file
 
     # CPU fallback - use INT8 for smallest/fastest
-    return (
-        ["CPUExecutionProvider"],
-        MODEL_FILE_INT8,
-    )
+    return ["CPUExecutionProvider"], MODEL_FILE_INT8
 
 
 # MLX backend for Apple Silicon (uses Metal GPU)
@@ -132,7 +125,7 @@ except ImportError as e:
     logger.debug("MLX backend unavailable: %s", e)
 
 # Global embedder instance for caching across calls (useful for library usage)
-_global_embedder: "Embedder | None" = None
+_global_embedder: "EmbedderProtocol | None" = None
 _global_lock = threading.Lock()
 
 
@@ -276,11 +269,7 @@ class Embedder:
             token_embeddings = outputs[0]  # (batch, seq_len, hidden_size)
             embeddings = token_embeddings[:, 0, :]  # CLS token at position 0
 
-        # L2 normalize
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        embeddings = embeddings / np.maximum(norms, 1e-9)
-
-        return embeddings.astype(np.float32)
+        return l2_normalize(embeddings).astype(np.float32)
 
     def embed(self, texts: list[str]) -> np.ndarray:
         """Generate embeddings for documents (for indexing).
@@ -291,17 +280,7 @@ class Embedder:
         Returns:
             numpy array of shape (len(texts), DIMENSIONS) with normalized embeddings.
         """
-        if not texts:
-            return np.array([], dtype=np.float32).reshape(0, DIMENSIONS)
-
-        self._ensure_loaded()
-
-        all_embeddings = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            all_embeddings.append(self._embed_batch(batch))
-
-        return np.vstack(all_embeddings)
+        return batch_embed(texts, self.batch_size, self._embed_batch, self._ensure_loaded)
 
     def embed_one(self, text: str, use_cache: bool = True) -> np.ndarray:
         """Embed a single query string (for search).
@@ -313,15 +292,4 @@ class Embedder:
         Returns:
             Normalized embedding vector of shape (DIMENSIONS,).
         """
-        if use_cache and text in self._query_cache:
-            return self._query_cache[text]
-
-        prefixed_text = QUERY_PREFIX + text
-        embedding = self._embed_batch([prefixed_text])[0]
-
-        if use_cache:
-            if len(self._query_cache) >= QUERY_CACHE_MAX_SIZE:
-                evict_cache(self._query_cache)
-            self._query_cache[text] = embedding
-
-        return embedding
+        return cached_embed_one(text, self._query_cache, self._embed_batch, use_cache)
