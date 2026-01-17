@@ -3,7 +3,7 @@
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
 | Phase     | 30 (code quality refactor)    | 2026-01-17 |
-| Version   | 0.0.29-dev                    | 2026-01-17 |
+| Version   | 0.0.32                        | 2026-01-17 |
 | Package   | `hhg` (renamed from `hygrep`) | 2025-12-16 |
 | Branch    | main                          | 2025-12-16 |
 | PyPI      | https://pypi.org/project/hhg/ | 2025-12-16 |
