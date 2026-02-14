@@ -51,13 +51,13 @@ tree-sitter-julia = ">=0.23.1, <0.24"
 tree-sitter-hcl = ">=1.2.0, <2"
 
 [tasks]
-# Build Mojo scanner as Python extension
+# Build Mojo scanner as Python extension (optional, not required)
 build-ext = "mojo build src/scanner/_scanner.mojo --emit shared-lib -o src/hygrep/_scanner.so"
-# Run CLI (semantic-first)
+# Run CLI
 hhg = { cmd = "python -m hygrep.cli", env = { PYTHONPATH = "src" } }
-# Run Mojo tests
+# Run Mojo tests (optional, requires Mojo toolchain)
 test-mojo = "mojo -I . tests/test_regex_smoke.mojo && mojo -I . tests/test_scanner.mojo"
 # Run Python tests
 test-py = { cmd = "python -m hygrep.cli clean -r . && python tests/test_context.py && python tests/test_embedder.py && python tests/test_semantic.py && python tests/test_cli.py && python tests/test_golden.py && python tests/test_languages.py && python tests/test_scanner_fallback.py", env = { PYTHONPATH = "src", TOKENIZERS_PARALLELISM = "false", NO_COLOR = "1" } }
-# Run all tests
-test = { depends-on = ["test-mojo", "test-py"] }
+# Run all tests (Python only; use test-mojo separately if Mojo toolchain available)
+test = { depends-on = ["test-py"] }

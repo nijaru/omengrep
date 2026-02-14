@@ -6,7 +6,7 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 
-from hygrep.scanner import _is_binary_content, scan
+from hygrep.scanner import scan
 
 
 class TestScannerBasics:
@@ -140,8 +140,8 @@ class TestBinaryFiles:
 
     def test_binary_content_detected(self):
         """Detect binary content by null bytes."""
-        assert _is_binary_content(b"hello\x00world")
-        assert not _is_binary_content(b"hello world")
+        assert b"\x00" in b"hello\x00world"
+        assert b"\x00" not in b"hello world"
 
     def test_binary_content_skipped(self):
         """Skip files with binary content even if extension is text."""

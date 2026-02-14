@@ -92,14 +92,6 @@ pattern = "(?P<version>.+)"
 [tool.hatch.build.targets.wheel]
 packages = ["src/hygrep"]
 
-[tool.hatch.build.targets.wheel.force-include]
-# Include pre-built Mojo extension
-# Built with: mojo build src/scanner/_scanner.mojo --emit shared-lib -o src/hygrep/_scanner.so
-"src/hygrep/_scanner.so" = "hygrep/_scanner.so"
-
-[tool.hatch.build.targets.wheel.hooks.custom]
-path = "hatch_build.py"
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -110,7 +102,7 @@ select = ["E", "F", "W", "I"]
 [tool.ty]
 # Ignore unresolved imports for optional/dynamic modules
 [tool.ty.rules]
-unresolved-import = "ignore"  # tomli fallback, _scanner extension
+unresolved-import = "ignore"  # tomli fallback, optional deps
 possibly-missing-attribute = "ignore"  # onnxruntime lacks stubs
 no-matching-overload = "ignore"  # numpy stubs incomplete
 invalid-key = "ignore"  # union result type (SearchResult | HybridSearchResult)

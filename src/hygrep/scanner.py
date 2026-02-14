@@ -1,4 +1,4 @@
-"""Pure Python fallback scanner for when Mojo extension is not available."""
+"""File scanner — walks directory tree and reads matching files."""
 
 import os
 import re
@@ -91,22 +91,16 @@ BINARY_EXTENSIONS = frozenset(
 MAX_FILE_SIZE = 1_000_000  # 1MB
 
 
-def _is_binary_content(content: bytes, check_size: int = 8192) -> bool:
-    """Check if content appears to be binary (contains null bytes)."""
-    return b"\x00" in content[:check_size]
-
-
 def scan(root: str | Path, pattern: str, include_hidden: bool = False) -> dict[str, str]:
-    """
-    Scan directory tree for files matching regex pattern.
+    """Scan directory tree for files matching regex pattern.
 
     Args:
-        root: Root directory path
-        pattern: Regex pattern to match
-        include_hidden: Whether to include hidden files (default False)
+        root: Root directory path.
+        pattern: Regex pattern to match file contents.
+        include_hidden: Whether to include hidden files (default False).
 
     Returns:
-        Dict mapping file paths to their contents
+        Dict mapping file paths to their contents.
     """
     root_path = Path(root) if isinstance(root, str) else root
     if not root_path.exists():
@@ -114,27 +108,28 @@ def scan(root: str | Path, pattern: str, include_hidden: bool = False) -> dict[s
     if not root_path.is_dir():
         raise ValueError(f"Path is not a directory: {root}")
 
-    try:
-        regex = re.compile(pattern, re.IGNORECASE)
-    except re.error as e:
-        raise ValueError(f"Invalid regex pattern: {e}") from e
+    # Fast path: "." matches everything, skip regex
+    match_all = pattern == "."
+    if not match_all:
+        try:
+            regex = re.compile(pattern, re.IGNORECASE)
+        except re.error as e:
+            raise ValueError(f"Invalid regex pattern: {e}") from e
 
     results: dict[str, str] = {}
     visited: set[str] = set()
 
     for dirpath, dirnames, filenames in os.walk(str(root_path), followlinks=False):
-        # Resolve to catch symlink loops
         try:
             real_path = os.path.realpath(dirpath)
             if real_path in visited:
-                dirnames.clear()  # Don't descend
+                dirnames.clear()
                 continue
             visited.add(real_path)
         except OSError:
             dirnames.clear()
             continue
 
-        # Filter directories in-place
         dirnames[:] = [
             d
             for d in dirnames
@@ -142,42 +137,35 @@ def scan(root: str | Path, pattern: str, include_hidden: bool = False) -> dict[s
         ]
 
         for filename in filenames:
-            # Skip hidden files unless flag set
             if not include_hidden and filename.startswith("."):
                 continue
 
-            # Skip binary extensions
             _, ext = os.path.splitext(filename)
             if ext.lower() in BINARY_EXTENSIONS:
                 continue
 
-            # Skip lock files by pattern
             if filename.endswith("-lock.json"):
                 continue
 
             filepath = os.path.join(dirpath, filename)
 
             try:
-                # Skip large files
-                if os.path.getsize(filepath) > MAX_FILE_SIZE:
+                size = os.path.getsize(filepath)
+                if size > MAX_FILE_SIZE:
                     continue
 
-                # Read and check content
                 with open(filepath, "rb") as f:
-                    content_bytes = f.read()
+                    raw = f.read()
 
-                # Skip binary files
-                if _is_binary_content(content_bytes):
+                if b"\x00" in raw[:8192]:
                     continue
 
-                # Decode as UTF-8
                 try:
-                    content = content_bytes.decode("utf-8")
+                    content = raw.decode("utf-8")
                 except UnicodeDecodeError:
                     continue
 
-                # Match pattern
-                if regex.search(content):
+                if match_all or regex.search(content):
                     results[filepath] = content
 
             except (OSError, PermissionError):
