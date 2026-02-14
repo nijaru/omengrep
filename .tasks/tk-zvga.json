@@ -15,10 +15,14 @@
     {
       "ts": "2026-02-14T22:39:28.286Z",
       "msg": "Found critical bug: search_multi_with_text returned empty because store() doesn't index text for BM25. Fixed by adding index_text() to omendb and calling it after store() in hhg. Also found target/ not in .gitignore causing 1165 files indexed instead of 69. Both fixed."
+    },
+    {
+      "ts": "2026-02-14T23:03:21.327Z",
+      "msg": "Search was silently broken (BM25 text never indexed) — fixed. Need systematic verification of: incremental update, file deletion, merge, stale detection, file refs, all output formats, exit codes, HHG_AUTO_BUILD, threshold, type filtering, excludes"
     }
   ],
   "created_at": "2026-02-14T22:29:52.211Z",
-  "updated_at": "2026-02-14T22:39:28.286Z",
+  "updated_at": "2026-02-14T23:03:21.327Z",
   "completed_at": null,
   "external": {}
 }

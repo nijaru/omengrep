@@ -11,9 +11,14 @@
   "blocked_by": [],
   "estimate": null,
   "due_date": null,
-  "logs": [],
+  "logs": [
+    {
+      "ts": "2026-02-14T23:03:22.041Z",
+      "msg": "Old Python CI/release workflows deleted. Need new Rust CI (cargo build/test/clippy) and cargo-dist release workflow. GitHub has 1 low dependabot alert."
+    }
+  ],
   "created_at": "2026-02-14T10:47:12.785Z",
-  "updated_at": "2026-02-14T10:47:12.785Z",
+  "updated_at": "2026-02-14T23:03:22.041Z",
   "completed_at": null,
   "external": {}
 }

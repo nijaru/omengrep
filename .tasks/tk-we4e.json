@@ -15,10 +15,14 @@
     {
       "ts": "2026-02-14T22:39:28.324Z",
       "msg": "Overlaps with tk-zvga. Benchmark done: hhg search 2.5-4x faster than competitor, build 1.3x slower but indexes 5x more data (richer AST blocks + multi-vector tokens)."
+    },
+    {
+      "ts": "2026-02-14T23:03:22.522Z",
+      "msg": "Python source/tests deleted. tests/golden/ fixtures kept for future Rust integration tests. Need assert_cmd tests."
     }
   ],
   "created_at": "2026-02-14T10:47:11.946Z",
-  "updated_at": "2026-02-14T22:39:28.324Z",
+  "updated_at": "2026-02-14T23:03:22.522Z",
   "completed_at": null,
   "external": {}
 }
