@@ -28,3 +28,4 @@ ai/tmp/
 *.so
 uv.lock
 .hhg/
+.worktrees/
