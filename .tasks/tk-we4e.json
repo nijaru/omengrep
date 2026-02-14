@@ -1,0 +1,19 @@
+{
+  "project": "tk",
+  "ref": "we4e",
+  "title": "Phase 7: Polish and parity testing",
+  "description": "Verify all CLI flags, output formats, error messages match Python. Performance benchmark vs Python. Test on real codebases (hygrep, omendb).",
+  "status": "open",
+  "priority": 2,
+  "labels": [],
+  "assignees": [],
+  "parent": null,
+  "blocked_by": [],
+  "estimate": null,
+  "due_date": null,
+  "logs": [],
+  "created_at": "2026-02-14T10:47:11.946Z",
+  "updated_at": "2026-02-14T10:47:11.946Z",
+  "completed_at": null,
+  "external": {}
+}

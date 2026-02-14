@@ -1,59 +1,63 @@
 ## Current State
 
-| Metric  | Value                        | Updated    |
-| ------- | ---------------------------- | ---------- |
-| Version | 0.0.32                       | 2026-01-17 |
-| PyPI    | https://pypi.org/project/hhg | 2026-01-17 |
-| Model   | snowflake-arctic-embed-s     | 2026-01-17 |
-| omendb  | >=0.0.23                     | 2026-01-10 |
+| Metric    | Value                      | Updated    |
+| --------- | -------------------------- | ---------- |
+| Version   | 0.1.0 (Rust)               | 2026-02-14 |
+| Model     | LateOn-Code-edge (48d/tok) | 2026-02-14 |
+| omendb    | 0.0.27 (multi-vector)      | 2026-02-14 |
+| Toolchain | nightly-2025-12-04         | 2026-02-14 |
 
-## Architecture
+## Rust Rewrite
+
+**Status:** Phases 1-6 complete. Compiles, CLI works, all commands implemented.
+
+**Branch:** Merged to `main`. 3 commits, 25 files, ~7600 lines.
+
+**Architecture:**
 
 ```
-Build:  Scan → Extract (parallel) → Embed (batched) → Store in omendb
-Search: Embed query → Hybrid search (semantic + BM25) → Results
-
-Backend selection (auto-detected):
-  MLX (Metal GPU) - macOS Apple Silicon, 2.57x faster
-  ONNX INT8 (CPU) - all other platforms
+Build:  Scan (ignore crate) -> Extract (tree-sitter, 25 langs) -> Embed (ort, LateOn-Code-edge INT8) -> Store (omendb multi-vector)
+Search: Embed query -> search_multi_with_text (BM25 + MuVERA MaxSim) -> Code-aware boost -> Results
 ```
 
-## Next Steps
+**Key decisions:**
 
-### Model Evaluation (Low Priority)
+- Single crate (lib + bin), not workspace
+- Multi-vector embeddings (48d/token, all tokens kept)
+- Manifest v8 (clean break from Python v1-v7)
+- omendb `search_multi_with_text` for hybrid search
+- ort 2.0.0-rc.11 with `Mutex<Session>` for `&self` compatibility
 
-Candidates to benchmark when ready:
+## Remaining Work
 
-| Model              | Params | Dims   | Context | Why Consider                    |
-| ------------------ | ------ | ------ | ------- | ------------------------------- |
-| Granite Small R2   | 47M    | 384    | 8192    | Code benchmarks, 16x context    |
-| MongoDB LEAF       | 23M    | 768    | 512     | SOTA for <=100M, same size      |
-| mxbai-edge-colbert | 17M    | 64/tok | -       | 55.0 ViDoRe (blocked on omendb) |
+### Phase 7: Polish & Parity (tk-we4e)
 
-Current `snowflake-arctic-embed-s` is working well. No urgency to switch.
+- Verify all CLI flags/output match Python
+- Performance benchmark vs Python
+- Test on real codebases
+- Integration tests with assert_cmd
 
-### ColBERT Support (Blocked)
+### Phase 8: Distribution (tk-8yhl)
 
-omendb does not support multi-vector storage. When it does:
+- `cargo install` from git
+- GitHub Actions CI (macOS-arm64, linux-x64)
+- cargo-dist for binary releases
+- Update README/CLAUDE.md
 
-- mxbai-edge-colbert-v0-17m ONNX INT8 is ready
-- Would give +4 quality points at smaller model size
+## Key Files (Rust)
 
-Alternatives if needed: LanceDB, Qdrant (both have native ColBERT).
-
-## Key Files
-
-| File                         | Purpose                            |
-| ---------------------------- | ---------------------------------- |
-| `src/hygrep/_common.py`      | Shared constants and utilities     |
-| `src/hygrep/embedder.py`     | ONNX embeddings, protocol, factory |
-| `src/hygrep/mlx_embedder.py` | MLX embeddings (Apple Silicon)     |
-| `src/hygrep/semantic.py`     | Index management, hybrid search    |
+| File                   | Purpose                             |
+| ---------------------- | ----------------------------------- |
+| `src/cli/search.rs`    | Search command + file ref parsing   |
+| `src/cli/build.rs`     | Build/update index                  |
+| `src/embedder/onnx.rs` | ORT inference (LateOn-Code-edge)    |
+| `src/extractor/mod.rs` | Tree-sitter extraction coordinator  |
+| `src/index/mod.rs`     | SemanticIndex (omendb multi-vector) |
+| `src/index/walker.rs`  | File walker (ignore crate)          |
+| `src/types.rs`         | Block, SearchResult, FileRef        |
 
 ## Research
 
-| File                                               | Topic                |
-| -------------------------------------------------- | -------------------- |
-| `research/embedding-models-update-2026-01.md`      | Latest model options |
-| `research/vidore-v3-embedding-analysis.md`         | ViDoRe V3 benchmarks |
-| `research/code-embedding-model-comparison-2026.md` | Code embeddings      |
+| File                                   | Topic                |
+| -------------------------------------- | -------------------- |
+| `research/multi-vector-code-search.md` | ColBERT/multi-vector |
