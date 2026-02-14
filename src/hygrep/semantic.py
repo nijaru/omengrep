@@ -404,27 +404,31 @@ class SemanticIndex:
 
         all_embeddings = np.concatenate(all_embeddings, axis=0)
 
-        # 3b. Bulk insert into omendb (parallel HNSW construction)
-        if on_progress:
-            on_progress(total, total, f"Inserting {total} blocks...")
-        items = [
-            {
-                "id": block_info["id"],
-                "vector": all_embeddings[i].tolist(),
-                "text": block_info["text"],
-                "metadata": {
-                    "file": block_info["file"],
-                    "type": block_info["block"]["type"],
-                    "name": block_info["block"]["name"],
-                    "start_line": block_info["block"]["start_line"],
-                    "end_line": block_info["block"]["end_line"],
-                    "content": block_info["block"]["content"],
-                },
-            }
-            for i, block_info in enumerate(all_blocks)
-        ]
-        db.set(items)
-        stats["blocks"] += total
+        # 3b. Insert into omendb in batches (bounds .tolist() memory)
+        insert_batch = batch_size * 8  # Large batches for HNSW parallelism
+        for i in range(0, total, insert_batch):
+            batch_blocks = all_blocks[i : i + insert_batch]
+            batch_emb = all_embeddings[i : i + insert_batch]
+            if on_progress:
+                on_progress(i, total, f"Inserting {len(batch_blocks)} blocks...")
+            items = [
+                {
+                    "id": block_info["id"],
+                    "vector": batch_emb[j].tolist(),
+                    "text": block_info["text"],
+                    "metadata": {
+                        "file": block_info["file"],
+                        "type": block_info["block"]["type"],
+                        "name": block_info["block"]["name"],
+                        "start_line": block_info["block"]["start_line"],
+                        "end_line": block_info["block"]["end_line"],
+                        "content": block_info["block"]["content"],
+                    },
+                }
+                for j, block_info in enumerate(batch_blocks)
+            ]
+            db.set(items)
+            stats["blocks"] += len(batch_blocks)
         db.flush()
 
         # 4. Update manifest
