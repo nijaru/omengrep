@@ -64,22 +64,29 @@ fn print_json(results: &[SearchResult], compact: bool) {
 }
 
 fn print_default(results: &[SearchResult], show_score: bool) {
-    use colored::Colorize;
+    use owo_colors::OwoColorize;
 
     for r in results {
-        let type_str = r.block_type.dimmed();
-        let name_str = r.name.bold();
-        let file_str = r.file.cyan();
-        let line_str = r.line.to_string().yellow();
+        let line_num = r.line.to_string();
 
         if show_score {
-            let score_pct = (r.score * 100.0) as i32;
+            let score_pct = ((r.score * 100.0) as i32).to_string();
             println!(
-                "{file_str}:{line_str} {type_str} {name_str} ({}% similar)",
-                score_pct.to_string().magenta()
+                "{}:{} {} {} ({}% similar)",
+                r.file.cyan(),
+                line_num.yellow(),
+                r.block_type.dimmed(),
+                r.name.bold(),
+                score_pct.magenta()
             );
         } else {
-            println!("{file_str}:{line_str} {type_str} {name_str}");
+            println!(
+                "{}:{} {} {}",
+                r.file.cyan(),
+                line_num.yellow(),
+                r.block_type.dimmed(),
+                r.name.bold()
+            );
         }
 
         // Content preview (first 3 non-empty lines)

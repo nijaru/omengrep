@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
-use sha2::{Digest, Sha256};
 
 use crate::embedder::{self, Embedder, TOKEN_DIM};
 use crate::extractor::Extractor;
@@ -674,8 +673,6 @@ fn find_block_by_line(
 }
 
 fn hash_content(content: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
-    let result = hasher.finalize();
-    hex::encode(&result[..8])
+    let hash = blake3::hash(content.as_bytes());
+    hash.to_hex()[..16].to_string()
 }
