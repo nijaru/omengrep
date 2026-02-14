@@ -8,6 +8,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 import omendb
 
 from .embedder import DIMENSIONS, get_embedder
@@ -227,12 +228,14 @@ class SemanticIndex:
         """Open or create the vector database."""
         if self._db is None:
             self.index_dir.mkdir(parents=True, exist_ok=True)
-            self._db = omendb.open(self.vectors_path, dimensions=DIMENSIONS)
+            self._db = omendb.open(self.vectors_path, dimensions=DIMENSIONS, metric="cosine")
         return self._db
 
     def close(self) -> None:
         """Close database handle and release lock."""
-        self._db = None
+        if self._db is not None:
+            self._db.close()
+            self._db = None
 
     def _file_hash(self, path: Path) -> str:
         """Get hash of file content for change detection."""
@@ -384,37 +387,44 @@ class SemanticIndex:
             self._save_manifest(manifest)  # Save to record deletions
             return stats
 
-        # 3. Embed and store in batches (sequential)
+        # 3a. Embed all blocks (continuous inference, no pauses for HNSW)
         # Sort by text length for better MLX batching (more homogeneous -> less padding)
         all_blocks.sort(key=lambda b: len(b["text"]))
         total = len(all_blocks)
+        all_texts = [b["text"] for b in all_blocks]
+
+        # Embed in sub-batches for progress reporting, but don't interleave with db.set()
+        all_embeddings = []
         for i in range(0, total, batch_size):
-            batch = all_blocks[i : i + batch_size]
-            texts = [b["text"] for b in batch]
-
+            batch_texts = all_texts[i : i + batch_size]
             if on_progress:
-                on_progress(i, total, f"Embedding {len(batch)} blocks...")
+                on_progress(i, total, f"Embedding {len(batch_texts)} blocks...")
+            batch_embeddings = self.embedder.embed(batch_texts)
+            all_embeddings.append(batch_embeddings)
 
-            embeddings = self.embedder.embed(texts)
+        all_embeddings = np.concatenate(all_embeddings, axis=0)
 
-            items = [
-                {
-                    "id": block_info["id"],
-                    "vector": embeddings[j].tolist(),
-                    "text": block_info["text"],
-                    "metadata": {
-                        "file": block_info["file"],
-                        "type": block_info["block"]["type"],
-                        "name": block_info["block"]["name"],
-                        "start_line": block_info["block"]["start_line"],
-                        "end_line": block_info["block"]["end_line"],
-                        "content": block_info["block"]["content"],
-                    },
-                }
-                for j, block_info in enumerate(batch)
-            ]
-            db.set(items)
-            stats["blocks"] += len(batch)
+        # 3b. Bulk insert into omendb (parallel HNSW construction)
+        if on_progress:
+            on_progress(total, total, f"Inserting {total} blocks...")
+        items = [
+            {
+                "id": block_info["id"],
+                "vector": all_embeddings[i].tolist(),
+                "text": block_info["text"],
+                "metadata": {
+                    "file": block_info["file"],
+                    "type": block_info["block"]["type"],
+                    "name": block_info["block"]["name"],
+                    "start_line": block_info["block"]["start_line"],
+                    "end_line": block_info["block"]["end_line"],
+                    "content": block_info["block"]["content"],
+                },
+            }
+            for i, block_info in enumerate(all_blocks)
+        ]
+        db.set(items)
+        stats["blocks"] += total
         db.flush()
 
         # 4. Update manifest
@@ -761,7 +771,7 @@ class SemanticIndex:
         import time
 
         # Close db handle if open
-        self._db = None
+        self.close()
 
         if self.index_dir.exists():
             # omendb may briefly hold file locks, retry if needed
@@ -856,7 +866,9 @@ class SemanticIndex:
         # Open subdir database with context manager for proper cleanup
         subdir_vectors_path = str(subdir_index_path / VECTORS_DIR)
         try:
-            with omendb.open(subdir_vectors_path, dimensions=DIMENSIONS) as subdir_db:
+            with omendb.open(
+                subdir_vectors_path, dimensions=DIMENSIONS, metric="cosine"
+            ) as subdir_db:
                 stats = {"merged": 0, "files": 0, "skipped": 0}
 
                 # Process each file in subdir manifest
@@ -892,6 +904,7 @@ class SemanticIndex:
                             {
                                 "id": new_id,
                                 "vector": item["vector"],
+                                "text": item.get("text", ""),
                                 "metadata": metadata,
                             }
                         )
