@@ -31,10 +31,12 @@ pub fn run(path: &Path, force: bool, quiet: bool) -> Result<()> {
     // Find subdir indexes that will be superseded
     let subdir_indexes = index::find_subdir_indexes(&build_path, false);
 
-    if force && index_exists(&build_path) {
-        // Full rebuild: clear first
-        let index = SemanticIndex::new(&build_path, None)?;
-        index.clear()?;
+    if force {
+        // Full rebuild: always clear index dir (handles corrupt/partial state)
+        let index_dir = build_path.join(crate::index::INDEX_DIR);
+        if index_dir.exists() {
+            std::fs::remove_dir_all(&index_dir)?;
+        }
         build_index(&build_path, quiet)?;
     } else if index_exists(&build_path) {
         // Incremental update
