@@ -1,179 +1,113 @@
 # hygrep (hhg)
 
-**Hybrid file search — semantic + keyword matching**
-
-How it works:
-
-1. **Index**: ModernBERT embeddings + text for hybrid search (requires `hhg build` first, or set `HHG_AUTO_BUILD=1`)
-2. **Search**: Hybrid (semantic + BM25) via omendb (auto-updates stale files)
+**Hybrid semantic code search — multi-vector embeddings + BM25**
 
 ## Quick Reference
 
 ```bash
-pixi run build-ext            # Build Mojo scanner extension
-pixi run hhg build ./src      # Build index (required first)
-pixi run hhg "query" ./src    # Semantic search (text query)
-pixi run hhg file.py#func     # Find similar code (by name)
-pixi run hhg file.py:42       # Find similar code (by line)
-pixi run test                 # Run all tests
+cargo build --release                 # Build
+cargo install --path .                # Install binary
+hhg build ./src                       # Build index (required first)
+hhg "query" ./src                     # Semantic search (text query)
+hhg file.rs#func                      # Find similar code (by name)
+hhg file.rs:42                        # Find similar code (by line)
+cargo test                            # Run tests
 ```
 
 ## Architecture
 
 ```
-Hybrid Search:
-Query → Embed → Hybrid search (semantic + BM25) → Results
-                        ↓
-             Requires 'hhg build' first (.hhg/)
-             Auto-updates stale files on search
+Build:  Scan (ignore crate) -> Extract (tree-sitter, 25 langs) -> Embed (ort, LateOn-Code-edge INT8) -> Store (omendb multi-vector) + index_text (BM25)
+Search: Embed query -> search_multi_with_text (BM25 candidates + MuVERA MaxSim rerank) -> Code-aware boost -> Results
 
 Index hierarchy:
 - Building: checks parent (refuses if exists), merges subdirs (fast vector copy)
 - Searching: walks up to find index, filters results to search scope
 ```
 
-| Component  | Implementation                                                  |
-| ---------- | --------------------------------------------------------------- |
-| Scanner    | `src/scanner/_scanner.mojo` (Python extension) + `c_regex.mojo` |
-| Extraction | `src/hygrep/extractor.py` (Tree-sitter AST)                     |
-| Embeddings | `src/hygrep/embedder.py` (jina-code-int8 ONNX)                  |
-| Vector DB  | `src/hygrep/semantic.py` (omendb wrapper)                       |
+| Component  | Implementation                                        |
+| ---------- | ----------------------------------------------------- |
+| Scanner    | `ignore` crate (gitignore-aware, binary detection)    |
+| Extraction | Tree-sitter AST (25 languages)                        |
+| Embeddings | `ort` (LateOn-Code-edge INT8 ONNX, 48d/token)        |
+| Vector DB  | omendb (MuVERA multi-vector + BM25 hybrid)            |
+| Boosting   | Code-aware heuristics (name match, type, path)        |
 
 ## Project Structure
 
 ```
 src/
-├── scanner/
-│   ├── _scanner.mojo   # Python extension module (scan function)
-│   └── c_regex.mojo    # POSIX regex FFI (libc)
-├── hygrep/
-│   ├── __init__.py     # Package version
-│   ├── cli.py          # CLI entry point
-│   ├── embedder.py     # jina-code-int8 ONNX embeddings
-│   ├── semantic.py     # SemanticIndex (omendb wrapper)
-│   ├── extractor.py    # Tree-sitter extraction
-│   └── _scanner.so     # Built extension (gitignored)
-tests/                  # Mojo + Python tests
-pyproject.toml          # Python packaging
-hatch_build.py          # Platform wheel hook
+├── main.rs                 # Entry point
+├── lib.rs                  # Re-exports
+├── types.rs                # Block, SearchResult, FileRef
+├── boost.rs                # Code-aware ranking boosts
+├── cli/
+│   ├── mod.rs              # Command dispatch (clap)
+│   ├── search.rs           # Search command + file ref parsing
+│   ├── build.rs            # Build/update index
+│   ├── status.rs           # Index status
+│   ├── clean.rs            # Delete index
+│   ├── list.rs             # List indexes
+│   ├── model.rs            # Model management
+│   └── output.rs           # Result formatting (default, json, compact, files-only)
+├── embedder/
+│   ├── mod.rs              # Embedder trait + factory
+│   ├── onnx.rs             # ORT ONNX inference (LateOn-Code-edge)
+│   └── tokenizer.rs        # HuggingFace tokenizer wrapper
+├── extractor/
+│   ├── mod.rs              # Tree-sitter extraction coordinator
+│   ├── languages.rs        # Language registry (extension -> parser + query)
+│   ├── queries.rs          # Tree-sitter query definitions per language
+│   └── text.rs             # Markdown/prose chunking
+└── index/
+    ├── mod.rs              # SemanticIndex (omendb multi-vector)
+    ├── manifest.rs         # Manifest v8 (JSON, tracks files/hashes/blocks)
+    └── walker.rs           # File walker (ignore crate, gitignore-aware)
+Cargo.toml
 ```
 
 ## Technology Stack
 
-| Component    | Version               | Notes                      |
-| ------------ | --------------------- | -------------------------- |
-| Mojo         | 25.7.\*               | Via MAX package            |
-| Python       | >=3.11, <3.14         | CLI + inference            |
-| ONNX Runtime | >=1.16                | Model execution            |
-| Tree-sitter  | >=0.24                | AST parsing (22 languages) |
-| omendb       | >=0.0.14              | Hybrid vector + BM25 DB    |
-| Embeddings   | jina-code-int8        | INT8, 768 dims, ~154MB     |
-
-## Mojo Patterns
-
-### Python Extension Modules
-
-Build Mojo as native Python extension (no subprocess overhead):
-
-```mojo
-from python import Python, PythonObject
-from python.bindings import PythonModuleBuilder
-
-@export
-fn PyInit__scanner() -> PythonObject:
-    try:
-        var b = PythonModuleBuilder("_scanner")
-        b.def_function[scan]("scan", docstring="...")
-        return b.finalize()
-    except e:
-        return abort[PythonObject](String("failed: ", e))
-
-@export
-fn scan(root: PythonObject, pattern: PythonObject) raises -> PythonObject:
-    # Return Python dict of matches
-    var result = Python.evaluate("{}")
-    # ... scan logic ...
-    return result
-```
-
-Build: `mojo build src/scanner/_scanner.mojo --emit shared-lib -o src/hygrep/_scanner.so`
-
-### FFI for C Interop
-
-```mojo
-from sys.ffi import c_char, c_int, external_call
-
-fn regcomp(
-    preg: UnsafePointer[regex_t],
-    pattern: UnsafePointer[c_char],
-    cflags: c_int,
-) -> c_int:
-    return external_call["regcomp", c_int](preg, pattern, cflags)
-```
-
-### Memory Management
-
-```mojo
-var buffer = alloc[UInt8](size)
-defer: buffer.free()
-```
-
-### Parallel Patterns
-
-```mojo
-@parameter
-fn worker(i: Int):
-    result[i] = process(items[i])
-
-parallelize[worker](num_items)
-```
+| Component    | Version                  | Notes                                 |
+| ------------ | ------------------------ | ------------------------------------- |
+| Rust         | nightly-2025-12-04       | Required for omendb (portable_simd)   |
+| ort          | 2.0.0-rc.11              | ONNX Runtime inference                |
+| omendb       | 0.0.27 (path dep)        | Multi-vector + BM25 hybrid search     |
+| tree-sitter  | 0.25                     | AST parsing (25 languages)            |
+| Embeddings   | LateOn-Code-edge INT8    | 17M params, 48d/token, ~17MB          |
 
 ## Code Standards
 
-| Aspect     | Standard                                    |
-| ---------- | ------------------------------------------- |
-| Formatting | `mojo format` (automatic)                   |
-| Imports    | stdlib → external → local                   |
-| Functions  | Docstrings on public APIs                   |
-| Memory     | Explicit cleanup, no leaks                  |
-| Errors     | `raises` for recoverable, `abort` for fatal |
+| Aspect     | Standard                                           |
+| ---------- | -------------------------------------------------- |
+| Edition    | 2021 (moving to 2024)                              |
+| Errors     | `anyhow` (app), `thiserror` (lib boundaries)       |
+| Imports    | `crate::` over `super::`, stdlib -> external -> local |
+| Parallelism| `rayon` for CPU-bound extraction                   |
+| Strings    | `&str` > `String`, `&[T]` > `Vec<T>` where possible |
 
 ## Verification
 
-| Check | Command                     | Pass Criteria         |
-| ----- | --------------------------- | --------------------- |
-| Build | `pixi run build-ext`        | Zero errors           |
-| Test  | `pixi run test`             | All pass              |
-| Smoke | `pixi run hhg "test" ./src` | Returns results       |
-| Wheel | `uv build --wheel`          | Platform-tagged wheel |
+| Check  | Command                          | Pass Criteria   |
+| ------ | -------------------------------- | --------------- |
+| Build  | `cargo build --release`          | Zero errors     |
+| Test   | `cargo test`                     | All pass        |
+| Smoke  | `hhg "test" ./src`               | Returns results |
+| Lint   | `cargo clippy`                   | No warnings     |
 
-## Release to PyPI
+## Key Behaviors
 
-**DO NOT trigger release workflow unless user explicitly says "publish to PyPI".**
-
-Prerequisites (one-time):
-
-1. Configure PyPI trusted publishing at https://pypi.org/manage/account/publishing/
-2. Add pending publisher: project=`hygrep`, owner=`nijaru`, repo=`hygrep`, workflow=`release.yml`
-
-To release:
-
-```bash
-gh workflow run release.yml -f version=X.Y.Z
-```
-
-Or via GitHub UI: Actions → Release → Run workflow → Enter version
+- `HHG_AUTO_BUILD=1` — auto-build index on search if missing
+- Auto-update: search detects stale files and re-indexes before searching
+- Exit codes: 0 = match found, 1 = no match, 2 = error
+- File refs: `file#name` (by block name), `file:line` (by line number)
+- Output formats: default (colored), `--json`, `--json --compact`, `-l` (files only)
 
 ## AI Context
 
-**Read order:** `ai/STATUS.md` → `ai/DECISIONS.md`
+**Read order:** `ai/STATUS.md` -> `ai/DECISIONS.md`
 
-| File              | Purpose                 |
-| ----------------- | ----------------------- |
-| `ai/STATUS.md`    | Current state, blockers |
-| `ai/DECISIONS.md` | Architectural decisions |
-
-## External References
-
-- Mojo stdlib patterns: `~/github/modular/modular/mojo/stdlib/`
-- Python extensions: `~/github/modular/modular/mojo/integration-test/python-extension-modules/`
+| File              | Purpose                          |
+| ----------------- | -------------------------------- |
+| `ai/STATUS.md`    | Current state, blockers, roadmap |
+| `ai/DECISIONS.md` | Architectural decisions          |

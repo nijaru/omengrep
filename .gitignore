@@ -1,34 +1,31 @@
-# Mojo / Magic
-.magic/
-.pixi/
-build/
-.build/
-
 # Rust
 target/
 
-# Python
+# Python (legacy, may still exist locally)
 __pycache__/
 *.pyc
 .venv/
 .ruff_cache/
 dist/
+*.egg-info
+*.so
+
+# Mojo / Pixi (legacy)
+.magic/
+.pixi/
+build/
+.build/
+uv.lock
+pixi.lock
 
 # OS
 .DS_Store
 
-# Agent Context
+# Agent context
 ai/tmp/
 
-# pixi environments
-.pixi
-*.egg-info
-# magic environments
-.magic
-# Compiled binary (root level only)
-/hygrep
-# Compiled extensions
-*.so
-uv.lock
+# Index
 .hhg/
+
+# Git worktrees
 .worktrees/
