@@ -5,8 +5,8 @@ use anyhow::Result;
 use ndarray::Array2;
 
 /// Model configuration for LateOn-Code-edge.
-pub const MODEL_REPO: &str = "LatentScope/LateOn-Code-edge";
-pub const MODEL_FILE: &str = "onnx/model.onnx";
+pub const MODEL_REPO: &str = "lightonai/LateOn-Code-edge";
+pub const MODEL_FILE: &str = "model.onnx";
 pub const TOKENIZER_FILE: &str = "tokenizer.json";
 pub const TOKEN_DIM: usize = 48;
 pub const DOC_MAX_LENGTH: usize = 2048;
