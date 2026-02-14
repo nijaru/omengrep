@@ -1,0 +1,90 @@
+[package]
+name = "hhg"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Hybrid file search — semantic + keyword matching"
+repository = "https://github.com/nijaru/hygrep"
+
+[[bin]]
+name = "hhg"
+path = "src/main.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+colored = "2"
+indicatif = "0.17"
+
+# Embedding inference
+ort = { version = "2.0.0-rc.11", features = ["download-binaries"] }
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+ndarray = "0.17"
+
+# Vector database
+omendb = { path = "/Users/nick/github/omendb/omendb" }
+
+# Tree-sitter
+tree-sitter = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-javascript = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-rust = "0.24"
+tree-sitter-go = "0.23"
+tree-sitter-c = "0.24"
+tree-sitter-cpp = "0.23"
+tree-sitter-java = "0.23"
+tree-sitter-ruby = "0.23"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-bash = "0.25"
+tree-sitter-php = "0.24"
+tree-sitter-kotlin-ng = "1"
+tree-sitter-lua = "0.4"
+tree-sitter-swift = "0.7"
+tree-sitter-elixir = "0.3"
+tree-sitter-zig = "1"
+tree-sitter-yaml = "0.7"
+tree-sitter-toml-ng = "0.7"
+tree-sitter-json = "0.24"
+tree-sitter-html = "0.23"
+tree-sitter-css = "0.25"
+tree-sitter-hcl = "1"
+
+# File walking
+ignore = "0.4"
+
+# Model download
+hf-hub = "0.4"
+
+# Parallelism
+rayon = "1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Hashing
+sha2 = "0.10"
+hex = "0.4"
+
+# Regex
+regex = "1"
+
+# Directory traversal (for find_subdir_indexes)
+walkdir = "2"
+
+# CPU count
+num_cpus = "1"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

@@ -105,7 +105,7 @@ impl SemanticIndex {
         // Extract blocks in parallel
         let all_blocks: Vec<(Vec<Block>, String, String)> = to_process
             .par_iter()
-            .map(|(path, content, rel_path, file_hash)| {
+            .map(|(_path, content, rel_path, file_hash)| {
                 let mut extractor = Extractor::new();
                 let blocks = extractor.extract(rel_path, content).unwrap_or_default();
                 (blocks, rel_path.clone(), file_hash.clone())
