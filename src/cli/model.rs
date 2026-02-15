@@ -13,7 +13,7 @@ pub fn status() -> Result<()> {
     if model_cached && tokenizer_cached {
         println!("{MODEL_REPO} (installed)");
     } else {
-        eprintln!("Model not installed -- run 'hhg model install'");
+        eprintln!("Model not installed -- run 'og model install'");
     }
 
     Ok(())

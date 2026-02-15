@@ -13,7 +13,7 @@ pub fn run(path: &Path, recursive: bool) -> Result<()> {
     if path.join(INDEX_DIR).join("manifest.json").exists() {
         let index = SemanticIndex::new(&path, None)?;
         index.clear()?;
-        println!("Deleted ./.hhg/");
+        println!("Deleted ./.og/");
         deleted_count += 1;
     } else {
         // Check if this path is part of a parent index
@@ -38,7 +38,7 @@ pub fn run(path: &Path, recursive: bool) -> Result<()> {
                             let msg = e.to_string();
                             if msg.contains("older version") || msg.contains("different model") {
                                 eprintln!(
-                                    "Parent index needs rebuild. Run: hhg build --force {}",
+                                    "Parent index needs rebuild. Run: og build --force {}",
                                     parent.display()
                                 );
                                 std::process::exit(EXIT_ERROR);
@@ -48,7 +48,7 @@ pub fn run(path: &Path, recursive: bool) -> Result<()> {
                     }
                 } else {
                     eprintln!(
-                        "Hint: Use 'hhg clean {}' to delete the parent index",
+                        "Hint: Use 'og clean {}' to delete the parent index",
                         parent.display()
                     );
                 }

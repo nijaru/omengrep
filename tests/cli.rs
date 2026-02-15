@@ -9,8 +9,8 @@ fn fixtures_dir() -> PathBuf {
 }
 
 #[allow(deprecated)]
-fn hhg() -> Command {
-    Command::cargo_bin("hhg").unwrap()
+fn og() -> Command {
+    Command::cargo_bin("og").unwrap()
 }
 
 /// Build an index in a temp directory by copying fixtures, return the temp dir.
@@ -26,8 +26,7 @@ fn build_fixture_index() -> TempDir {
     }
 
     // Build index
-    hhg()
-        .args(["build", tmp.path().to_str().unwrap()])
+    og().args(["build", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stderr(predicate::str::contains("Indexed"));
@@ -38,15 +37,14 @@ fn build_fixture_index() -> TempDir {
 #[test]
 fn build_creates_index() {
     let tmp = build_fixture_index();
-    assert!(tmp.path().join(".hhg/manifest.json").exists());
+    assert!(tmp.path().join(".og/manifest.json").exists());
 }
 
 #[test]
 fn status_shows_files() {
     let tmp = build_fixture_index();
 
-    hhg()
-        .args(["status", tmp.path().to_str().unwrap()])
+    og().args(["status", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::contains("files"))
@@ -57,8 +55,7 @@ fn status_shows_files() {
 fn search_finds_results() {
     let tmp = build_fixture_index();
 
-    hhg()
-        .args(["error handling", tmp.path().to_str().unwrap()])
+    og().args(["error handling", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::contains("errors.rs"));
@@ -68,8 +65,7 @@ fn search_finds_results() {
 fn search_authentication() {
     let tmp = build_fixture_index();
 
-    hhg()
-        .args(["authentication", tmp.path().to_str().unwrap()])
+    og().args(["authentication", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::contains("auth.py"));
@@ -79,11 +75,7 @@ fn search_authentication() {
 fn search_no_match_exits_1() {
     let tmp = build_fixture_index();
 
-    hhg()
-        .args([
-            "zzzznonexistentqueryzzzz",
-            tmp.path().to_str().unwrap(),
-        ])
+    og().args(["zzzznonexistentqueryzzzz", tmp.path().to_str().unwrap()])
         .assert()
         .code(1)
         .stderr(predicate::str::contains("No results"));
@@ -93,7 +85,7 @@ fn search_no_match_exits_1() {
 fn search_json_output() {
     let tmp = build_fixture_index();
 
-    let output = hhg()
+    let output = og()
         .args(["--json", "error", tmp.path().to_str().unwrap(), "-n", "2"])
         .assert()
         .success();
@@ -115,8 +107,7 @@ fn search_json_output() {
 fn search_files_only() {
     let tmp = build_fixture_index();
 
-    hhg()
-        .args(["-l", "authentication", tmp.path().to_str().unwrap()])
+    og().args(["-l", "authentication", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::contains("auth.py"));
@@ -127,7 +118,7 @@ fn search_type_filter() {
     let tmp = build_fixture_index();
 
     // Filter to .py files only — use "password" which is unique to auth.py
-    let output = hhg()
+    let output = og()
         .args(["-t", "py", "password", tmp.path().to_str().unwrap()])
         .assert()
         .success();
@@ -141,8 +132,14 @@ fn search_type_filter() {
 fn search_limit_results() {
     let tmp = build_fixture_index();
 
-    let output = hhg()
-        .args(["--json", "-n", "1", "function", tmp.path().to_str().unwrap()])
+    let output = og()
+        .args([
+            "--json",
+            "-n",
+            "1",
+            "function",
+            tmp.path().to_str().unwrap(),
+        ])
         .assert()
         .success();
 
@@ -154,15 +151,14 @@ fn search_limit_results() {
 #[test]
 fn clean_removes_index() {
     let tmp = build_fixture_index();
-    assert!(tmp.path().join(".hhg").exists());
+    assert!(tmp.path().join(".og").exists());
 
-    hhg()
-        .args(["clean", tmp.path().to_str().unwrap()])
+    og().args(["clean", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::contains("Deleted"));
 
-    assert!(!tmp.path().join(".hhg").exists());
+    assert!(!tmp.path().join(".og").exists());
 }
 
 #[test]
@@ -170,8 +166,7 @@ fn no_index_exits_2() {
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("test.rs"), "fn main() {}").unwrap();
 
-    hhg()
-        .args(["query", tmp.path().to_str().unwrap()])
+    og().args(["query", tmp.path().to_str().unwrap()])
         .assert()
         .code(2)
         .stderr(predicate::str::contains("No index found"));
@@ -181,8 +176,7 @@ fn no_index_exits_2() {
 fn build_force_rebuilds() {
     let tmp = build_fixture_index();
 
-    hhg()
-        .args(["build", "--force", tmp.path().to_str().unwrap()])
+    og().args(["build", "--force", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stderr(predicate::str::contains("Indexed"));
@@ -200,8 +194,7 @@ fn incremental_update() {
     .unwrap();
 
     // Search should auto-update
-    hhg()
-        .args(["hello", tmp.path().to_str().unwrap()])
+    og().args(["hello", tmp.path().to_str().unwrap()])
         .assert()
         .success()
         .stderr(predicate::str::contains("Updating"));
@@ -213,8 +206,7 @@ fn camel_case_query_matches() {
 
     // The fixtures have camelCase identifiers (api_handlers.ts)
     // Query with split terms should match
-    hhg()
-        .args(["user manager", tmp.path().to_str().unwrap()])
+    og().args(["user manager", tmp.path().to_str().unwrap()])
         .assert()
         .success();
 }

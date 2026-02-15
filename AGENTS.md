@@ -1,16 +1,16 @@
-# hygrep (hhg)
+# omengrep (og)
 
-**Hybrid semantic code search — multi-vector embeddings + BM25**
+**Semantic code search — multi-vector embeddings + BM25**
 
 ## Quick Reference
 
 ```bash
 cargo build --release                 # Build
 cargo install --path .                # Install binary
-hhg build ./src                       # Build index (required first)
-hhg "query" ./src                     # Semantic search (text query)
-hhg file.rs#func                      # Find similar code (by name)
-hhg file.rs:42                        # Find similar code (by line)
+og build ./src                        # Build index (required first)
+og "query" ./src                      # Semantic search (text query)
+og file.rs#func                       # Find similar code (by name)
+og file.rs:42                         # Find similar code (by line)
 cargo test                            # Run tests
 ```
 
@@ -41,6 +41,7 @@ src/
 ├── lib.rs                  # Re-exports
 ├── types.rs                # Block, SearchResult, FileRef
 ├── boost.rs                # Code-aware ranking boosts
+├── tokenize.rs             # BM25 identifier splitting
 ├── cli/
 │   ├── mod.rs              # Command dispatch (clap)
 │   ├── search.rs           # Search command + file ref parsing
@@ -92,12 +93,12 @@ Cargo.toml
 | ------ | -------------------------------- | --------------- |
 | Build  | `cargo build --release`          | Zero errors     |
 | Test   | `cargo test`                     | All pass        |
-| Smoke  | `hhg "test" ./src`               | Returns results |
+| Smoke  | `og "test" ./src`                | Returns results |
 | Lint   | `cargo clippy`                   | No warnings     |
 
 ## Key Behaviors
 
-- `HHG_AUTO_BUILD=1` — auto-build index on search if missing
+- `OG_AUTO_BUILD=1` — auto-build index on search if missing
 - Auto-update: search detects stale files and re-indexes before searching
 - Exit codes: 0 = match found, 1 = no match, 2 = error
 - File refs: `file#name` (by block name), `file:line` (by line number)

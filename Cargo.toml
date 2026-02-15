@@ -1,13 +1,13 @@
 [package]
-name = "hhg"
+name = "omengrep"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Hybrid file search — semantic + keyword matching"
-repository = "https://github.com/nijaru/hygrep"
+description = "Semantic code search — multi-vector embeddings + BM25"
+repository = "https://github.com/nijaru/omengrep"
 
 [[bin]]
-name = "hhg"
+name = "og"
 path = "src/main.rs"
 
 [dependencies]

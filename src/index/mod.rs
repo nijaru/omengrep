@@ -14,7 +14,7 @@ use crate::types::{Block, IndexStats, SearchResult};
 
 use manifest::{FileEntry, Manifest};
 
-pub const INDEX_DIR: &str = ".hhg";
+pub const INDEX_DIR: &str = ".og";
 pub const VECTORS_DIR: &str = "vectors";
 
 /// Block types that are documentation, not code.
@@ -609,7 +609,7 @@ pub fn find_parent_index(path: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Find all .hhg/ directories under path.
+/// Find all .og/ directories under path.
 pub fn find_subdir_indexes(path: &Path, include_root: bool) -> Vec<PathBuf> {
     let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let mut indexes = Vec::new();

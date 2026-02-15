@@ -25,7 +25,7 @@ pixi.lock
 ai/tmp/
 
 # Index
-.hhg/
+.og/
 
 # Git worktrees
 .worktrees/

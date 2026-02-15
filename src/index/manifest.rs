@@ -60,7 +60,7 @@ impl Manifest {
                 .map(|f| f.as_object().is_some_and(|o| !o.is_empty()))
                 .unwrap_or(false);
             if has_files {
-                bail!("Index was created by an older version. Run 'hhg build --force' to rebuild.");
+                bail!("Index was created by an older version. Run 'og build --force' to rebuild.");
             }
         }
 
@@ -73,7 +73,7 @@ impl Manifest {
                 .unwrap_or(false);
             if has_files {
                 bail!(
-                    "Index was created with a different model. Run 'hhg build --force' to rebuild."
+                    "Index was created with a different model. Run 'og build --force' to rebuild."
                 );
             }
         }

@@ -27,10 +27,10 @@ pub fn run(path: &Path) -> Result<()> {
 
         match SemanticIndex::new(idx_root, None) {
             Ok(index) => match index.count() {
-                Ok(count) => println!("  {display_path}/.hhg/ ({count} blocks)"),
-                Err(_) => println!("  {display_path}/.hhg/ (needs rebuild)"),
+                Ok(count) => println!("  {display_path}/.og/ ({count} blocks)"),
+                Err(_) => println!("  {display_path}/.og/ (needs rebuild)"),
             },
-            Err(_) => println!("  {display_path}/.hhg/ (needs rebuild)"),
+            Err(_) => println!("  {display_path}/.og/ (needs rebuild)"),
         }
     }
 

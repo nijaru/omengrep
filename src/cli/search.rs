@@ -25,7 +25,7 @@ pub fn run(
     let query = match query {
         Some(q) => q,
         None => {
-            bail!("No query provided. Run 'hhg --help' for usage.");
+            bail!("No query provided. Run 'og --help' for usage.");
         }
     };
 
@@ -46,17 +46,17 @@ pub fn run(
 
     if existing_index.is_none() {
         // Check for auto-build
-        if std::env::var("HHG_AUTO_BUILD")
+        if std::env::var("OG_AUTO_BUILD")
             .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(false)
         {
             if !quiet {
-                eprintln!("Building index (HHG_AUTO_BUILD=1)...");
+                eprintln!("Building index (OG_AUTO_BUILD=1)...");
             }
             build_index(&path, quiet)?;
         } else {
-            eprintln!("No index found. Run 'hhg build' first.");
-            eprintln!("Tip: Set HHG_AUTO_BUILD=1 for auto-indexing");
+            eprintln!("No index found. Run 'og build' first.");
+            eprintln!("Tip: Set OG_AUTO_BUILD=1 for auto-indexing");
             std::process::exit(EXIT_ERROR);
         }
     }
@@ -169,7 +169,7 @@ fn run_similar_search(
     let (index_root, existing_index) = index::find_index_root(file_dir);
 
     if existing_index.is_none() {
-        eprintln!("No index found. Run 'hhg build' first.");
+        eprintln!("No index found. Run 'og build' first.");
         std::process::exit(EXIT_ERROR);
     }
 

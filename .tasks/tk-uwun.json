@@ -3,7 +3,7 @@
   "ref": "uwun",
   "title": "Evaluate rename to omgrep/omg",
   "description": "Package name omgrep on crates.io, binary name omg. Evaluate: update Cargo.toml, README, CLAUDE.md, CLI help text, index dir (.omg/ vs .hhg/), manifest compat. Tie branding to omendb.",
-  "status": "open",
+  "status": "active",
   "priority": 3,
   "labels": [],
   "assignees": [],
@@ -18,7 +18,7 @@
     }
   ],
   "created_at": "2026-02-14T22:29:52.187Z",
-  "updated_at": "2026-02-14T22:39:28.409Z",
+  "updated_at": "2026-02-15T01:00:52.636Z",
   "completed_at": null,
   "external": {}
 }

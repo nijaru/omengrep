@@ -9,7 +9,7 @@ pub fn run(path: &Path) -> Result<()> {
     let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
     if !path.join(INDEX_DIR).join("manifest.json").exists() {
-        eprintln!("No index. Run 'hhg build' to create.");
+        eprintln!("No index. Run 'og build' to create.");
         return Ok(());
     }
 
@@ -18,7 +18,7 @@ pub fn run(path: &Path) -> Result<()> {
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("older version") || msg.contains("different model") {
-                eprintln!("Index needs rebuild. Run: hhg build --force");
+                eprintln!("Index needs rebuild. Run: og build --force");
                 return Ok(());
             }
             eprintln!("{e}");
@@ -46,14 +46,14 @@ pub fn run(path: &Path) -> Result<()> {
                 }
                 let stale_str = parts.join(", ");
                 println!(
-                    "{file_count} files, {block_count} blocks ({stale_str}) -- run 'hhg build'"
+                    "{file_count} files, {block_count} blocks ({stale_str}) -- run 'og build'"
                 );
             }
         }
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("older version") || msg.contains("different model") {
-                eprintln!("Index needs rebuild. Run: hhg build --force");
+                eprintln!("Index needs rebuild. Run: og build --force");
             } else {
                 eprintln!("{e}");
                 std::process::exit(EXIT_ERROR);
