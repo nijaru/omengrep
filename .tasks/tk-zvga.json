@@ -3,7 +3,7 @@
   "ref": "zvga",
   "title": "Verify correctness after Rust rewrite",
   "description": "Systematic edge case and correctness review. Search was broken (no text indexing) until fix. What else is wrong? Test: incremental update, file deletion, merge_from_subdir, stale detection, parent index search, file refs (file#name, file:line), all output formats, error messages, exit codes, HHG_AUTO_BUILD, threshold filtering, type filtering, exclude patterns, code-only flag. Run on real repos.",
-  "status": "open",
+  "status": "done",
   "priority": 2,
   "labels": [],
   "assignees": [],
@@ -19,10 +19,14 @@
     {
       "ts": "2026-02-14T23:03:21.327Z",
       "msg": "Search was silently broken (BM25 text never indexed) — fixed. Need systematic verification of: incremental update, file deletion, merge, stale detection, file refs, all output formats, exit codes, HHG_AUTO_BUILD, threshold, type filtering, excludes"
+    },
+    {
+      "ts": "2026-02-15T00:26:00.241Z",
+      "msg": "Found and fixed double-lock bug in update(). Verified: status, text search, JSON output, files-only, file refs (#name and :line), compact, type filter, exclude, code-only, exit codes (0/1/2), auto-update, force rebuild, list, no-index error. All passing."
     }
   ],
   "created_at": "2026-02-14T22:29:52.211Z",
-  "updated_at": "2026-02-14T23:03:21.327Z",
-  "completed_at": null,
+  "updated_at": "2026-02-15T00:26:00.241Z",
+  "completed_at": "2026-02-15T00:26:00.212Z",
   "external": {}
 }

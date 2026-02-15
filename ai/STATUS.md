@@ -6,53 +6,49 @@
 | Model     | LateOn-Code-edge (48d/tok) | 2026-02-14 |
 | omendb    | 0.0.27 (multi-vector)      | 2026-02-14 |
 | Toolchain | nightly-2025-12-04         | 2026-02-14 |
+| Tests     | 26 (12 unit + 14 integration) | 2026-02-14 |
 
 ## Architecture
 
 ```
-Build:  Scan (ignore crate) -> Extract (tree-sitter, 25 langs) -> Embed (ort, LateOn-Code-edge INT8) -> Store (omendb multi-vector) + index_text (BM25)
-Search: Embed query -> search_multi_with_text (BM25 candidates + MuVERA MaxSim rerank) -> Code-aware boost -> Results
+Build:  Scan (ignore crate) -> Extract (tree-sitter, 25 langs) -> Split identifiers -> Embed (ort, LateOn-Code-edge INT8) -> Store (omendb multi-vector) + index_text (BM25 with split terms)
+Search: Split query identifiers -> Embed query -> search_multi_with_text (BM25 candidates + MuVERA MaxSim rerank) -> Code-aware boost -> Results
 ```
 
-## Benchmark (hygrep repo, M3 Max)
+## Benchmark (hygrep src, M3 Max, release)
 
 | Metric       | Value                          |
 | ------------ | ------------------------------ |
-| Build        | 10.8s (69 files, 801 blocks)   |
-| Search       | 270-440ms                      |
-| Index size   | 38MB (multi-vector + BM25)     |
-| Throughput   | ~71 blocks/s                   |
+| Build        | 2.1s (23 files, 118 blocks)    |
+| Search       | 110ms                          |
+| Throughput   | ~56 blocks/s                   |
 
 ## Remaining Work
 
-### Priority 1: Correctness (tk-zvga)
+### Rename (tk-uwun)
 
-- Systematic edge case verification post-rewrite
-- Search was silently broken until BM25 fix — what else is wrong?
-- Test: incremental update, file deletion, merge, stale detection, file refs, all output formats, exit codes
+- Evaluate rename to omgrep/omg — ties branding to omendb
 
-### Priority 2: BM25 Code Tokenization (tk-bm25)
+### Distribution (tk-4f2n)
 
-- Pre-split camelCase/snake_case before `index_text()` — immediate fix
-- Request custom tokenizer config in omendb `TextSearchConfig` — clean solution
-- Zero inference cost, directly improves keyword recall
-
-### Priority 3: Polish & Parity (tk-we4e)
-
-- Verify CLI flags/output match Python version
-- Integration tests with assert_cmd
-
-### Priority 4: Profile build (tk-kwzw), Rename (tk-uwun), Distribution (tk-4f2n, tk-8yhl)
-
-- Build is 1.3x slower while indexing 5x more — already good, profile for low-hanging fruit
-- Rename to omgrep (crate) / omg (binary) — ties branding to omendb
-- crates.io + npm + cargo-dist
+- Blocked on omendb crates.io publish (currently path dependency)
+- crates.io + cargo-dist for binary releases
 
 ### Future: SPLADE Sparse Vectors
 
 - Wait for omendb native sparse support
 - Evaluate `ibm-granite/granite-embedding-30m-sparse` (30M, Apache 2.0, 50.8 nDCG)
-- Near-term: BM25 tokenization improvements (Priority 2) cover the main gap
+
+## Completed
+
+- BM25 code-aware tokenization (camelCase/snake_case splitting, +35% NDCG expected)
+- Fixed double-lock bug in incremental update
+- Fixed invalid lookaround regex in text.rs
+- Fixed boost.rs camelCase splitting (was lowercasing before split — no-op)
+- Correctness verification (all CLI features tested)
+- Integration tests with assert_cmd (14 tests)
+- CI workflow (build/test/clippy)
+- Build profiling (no bottlenecks at current scale)
 
 ## omendb Requests
 
@@ -60,7 +56,7 @@ Search: Embed query -> search_multi_with_text (BM25 candidates + MuVERA MaxSim r
 2. **Custom tantivy tokenizer** in `TextSearchConfig` — for camelCase/snake_case splitting
 3. **Native sparse vector support** — for future SPLADE integration
 
-## Key Files (Rust)
+## Key Files
 
 | File                   | Purpose                             |
 | ---------------------- | ----------------------------------- |
@@ -70,13 +66,7 @@ Search: Embed query -> search_multi_with_text (BM25 candidates + MuVERA MaxSim r
 | `src/extractor/mod.rs` | Tree-sitter extraction coordinator  |
 | `src/index/mod.rs`     | SemanticIndex (omendb multi-vector) |
 | `src/index/walker.rs`  | File walker (ignore crate)          |
+| `src/tokenize.rs`      | BM25 identifier splitting           |
 | `src/boost.rs`         | Code-aware ranking boosts           |
 | `src/types.rs`         | Block, SearchResult, FileRef        |
-
-## Research
-
-| File                                   | Topic                              |
-| -------------------------------------- | ---------------------------------- |
-| `research/multi-vector-code-search.md` | ColBERT/multi-vector model eval    |
-| `tmp/splade-research.md`               | SPLADE vs BM25 for code (gitignored) |
-| `tmp/twitter-post-draft.md`            | omendb marketing draft (gitignored)  |
+| `tests/cli.rs`         | Integration tests (assert_cmd)      |

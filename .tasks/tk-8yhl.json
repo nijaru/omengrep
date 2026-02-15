@@ -3,7 +3,7 @@
   "ref": "8yhl",
   "title": "Phase 8: Distribution (CI, binary releases)",
   "description": "cargo install from git. GitHub Actions CI (macOS-arm64, linux-x64). cargo-dist for binary releases. Update README/CLAUDE.md for Rust project.",
-  "status": "open",
+  "status": "done",
   "priority": 3,
   "labels": [],
   "assignees": [],
@@ -15,10 +15,14 @@
     {
       "ts": "2026-02-14T23:03:22.041Z",
       "msg": "Old Python CI/release workflows deleted. Need new Rust CI (cargo build/test/clippy) and cargo-dist release workflow. GitHub has 1 low dependabot alert."
+    },
+    {
+      "ts": "2026-02-15T00:20:35.376Z",
+      "msg": "Created .github/workflows/ci.yml with build/test/clippy. Handles path dep with skip logic."
     }
   ],
   "created_at": "2026-02-14T10:47:12.785Z",
-  "updated_at": "2026-02-14T23:03:22.041Z",
-  "completed_at": null,
+  "updated_at": "2026-02-15T00:20:35.376Z",
+  "completed_at": "2026-02-15T00:20:35.349Z",
   "external": {}
 }

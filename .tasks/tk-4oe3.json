@@ -3,7 +3,7 @@
   "ref": "4oe3",
   "title": "BM25 code-aware tokenization",
   "description": "Pre-split camelCase/snake_case in embedding text before calling index_text(). getUserProfile -> 'getUserProfile get User Profile'. Apply same splitting to search queries. Zero inference cost, improves keyword recall for identifier-style queries. Long-term: request custom tantivy tokenizer support in omendb TextSearchConfig.",
-  "status": "open",
+  "status": "done",
   "priority": 2,
   "labels": [],
   "assignees": [],
@@ -15,10 +15,14 @@
     {
       "ts": "2026-02-14T23:03:20.829Z",
       "msg": "ACL 2021 research confirms camelCase/snake_case splitting improves BM25 NDCG@10 by +35% avg on code (up to +58% PHP, +50% Java). Implementation: transform 'getUserProfile' -> 'getUserProfile get User Profile' before index_text(). Apply same to queries. Filed omendb request for custom tantivy tokenizer: omendb/cloud/custom-tokenizer-text-search.md"
+    },
+    {
+      "ts": "2026-02-15T00:19:48.680Z",
+      "msg": "Implemented split_identifiers() in src/tokenize.rs. Applied to index_text() and search query. Fixed boost.rs camelCase bug. Fixed invalid regex in text.rs."
     }
   ],
   "created_at": "2026-02-14T22:48:39.798Z",
-  "updated_at": "2026-02-14T23:03:20.829Z",
-  "completed_at": null,
+  "updated_at": "2026-02-15T00:19:48.680Z",
+  "completed_at": "2026-02-15T00:19:48.655Z",
   "external": {}
 }

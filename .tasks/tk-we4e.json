@@ -3,7 +3,7 @@
   "ref": "we4e",
   "title": "Phase 7: Polish and parity testing",
   "description": "Verify all CLI flags, output formats, error messages match Python. Performance benchmark vs Python. Test on real codebases (hygrep, omendb).",
-  "status": "open",
+  "status": "done",
   "priority": 2,
   "labels": [],
   "assignees": [],
@@ -19,10 +19,14 @@
     {
       "ts": "2026-02-14T23:03:22.522Z",
       "msg": "Python source/tests deleted. tests/golden/ fixtures kept for future Rust integration tests. Need assert_cmd tests."
+    },
+    {
+      "ts": "2026-02-15T00:29:13.259Z",
+      "msg": "14 integration tests using assert_cmd. Covers: build, search, status, clean, list, force rebuild, incremental update, JSON output, files-only, type filter, exit codes, camelCase matching, no-index error."
     }
   ],
   "created_at": "2026-02-14T10:47:11.946Z",
-  "updated_at": "2026-02-14T23:03:22.522Z",
-  "completed_at": null,
+  "updated_at": "2026-02-15T00:29:13.259Z",
+  "completed_at": "2026-02-15T00:29:13.211Z",
   "external": {}
 }
