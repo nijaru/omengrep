@@ -1,6 +1,6 @@
 # omengrep (og)
 
-Local code search using embeddings and BM25.
+Local semantic code search using embeddings and BM25.
 
 ```bash
 cargo install --path .
