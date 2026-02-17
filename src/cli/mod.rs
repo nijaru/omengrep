@@ -1,6 +1,7 @@
 pub mod build;
 pub mod clean;
 pub mod list;
+pub mod mcp;
 pub mod model;
 pub mod output;
 pub mod search;
@@ -108,6 +109,8 @@ enum Command {
         #[command(subcommand)]
         action: Option<ModelAction>,
     },
+    /// Start MCP server (JSON-RPC over stdio).
+    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -137,6 +140,7 @@ pub fn run() -> anyhow::Result<()> {
             Some(ModelAction::Install { name }) => model::install(name.as_deref()),
             None => model::status(),
         },
+        Some(Command::Mcp) => mcp::run(),
         None => search::run(
             cli.query.as_deref(),
             &cli.path,
