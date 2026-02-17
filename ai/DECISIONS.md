@@ -106,8 +106,6 @@ Query -> BM25 (tantivy) candidates -> MuVERA MaxSim rerank -> Code-aware boost -
 
 **Key insight from research:** MuVERA reranking already handles semantic understanding. SPLADE's value is better candidate recall for conceptual queries. Current code-aware boost heuristics partially address this gap.
 
-See `ai/tmp/splade-research.md` for full analysis.
-
 ## 8. Naming: omengrep / og (2026-02-14)
 
 **Decision:** Package name `omengrep`, binary name `og`, index directory `.og/`.
@@ -148,13 +146,11 @@ See `ai/tmp/splade-research.md` for full analysis.
 
 **Implementation:** HashMap merge with Entry API — O(n) dedup. Overfetch 5x when scope filtering active, 1x without.
 
-## 11. Multi-Model Support (2026-02-16)
+## 11. Single Model (2026-02-16)
 
-**Decision:** `ModelConfig` struct with static registry, auto-detect model from manifest on search.
+**Decision:** Single model (LateOn-Code-edge) with `ModelConfig` struct for future extensibility.
 
-**Context:** LateOn-Code-edge (17M, 48d) is fast but LateOn-Code (149M, 128d) scores 11% higher on MTEB Code. Users should be able to choose.
-
-**Implementation:** `MODELS` array with (name, config) pairs. Manifest stores model version string. Search reads manifest, resolves config, creates correct embedder. Build accepts `--model` flag. Backwards-compatible aliases kept for `EDGE_MODEL` constants.
+**Context:** Initially built multi-model registry with `--model` flag. Simplified to single model — LateOn-Code (149M) is the obvious upgrade path but not worth the complexity until users ask for it. The `ModelConfig` struct remains for when that happens.
 
 ## 12. Token Pooling via compact() (2026-02-16)
 

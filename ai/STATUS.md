@@ -16,17 +16,6 @@ Search: Embed query (query tokenizer, 256 max) -> BM25 candidates + semantic can
 MCP:    og mcp (JSON-RPC/stdio) -> og_search, og_similar, og_status tools
 ```
 
-## Recent Changes (2026-02-16)
-
-Sprint 1-4 complete. Post-sprint review + refactor:
-
-- **Query tokenizer fix**: `embed_query` now uses query tokenizer (256 max) instead of document tokenizer (512). Affects search quality.
-- **Simplified to single model**: Removed multi-model registry, single LateOn-Code-edge config
-- **Centralized downloads**: Single `download_model_files()` with actionable error messages
-- **SearchParams struct**: Replaced 12-parameter `search::run` with struct
-- **Deduplication**: Shared `build_index`, `result_from_omendb` helper, `OutputFormat::from_flags`
-- **Build fix**: Double subdir cleanup message, stale TODO removed
-
 ## Remaining Work
 
 ### Publish to crates.io (tk-4f2n)
@@ -41,10 +30,18 @@ Sprint 1-4 complete. Post-sprint review + refactor:
 - Test MCP server with Claude Code (`og install-claude-code`)
 - Rebuild indexes after query tokenizer fix (search quality changed)
 
-### Future: SPLADE Sparse Vectors
+## Future Ideas
 
-- Wait for omendb native sparse support
-- Evaluate `ibm-granite/granite-embedding-30m-sparse` (30M, Apache 2.0, 50.8 nDCG)
+- **Regex pre-filter** — `--regex` flag to filter before semantic ranking (ColGrep has this)
+- **LateOn-Code (149M)** — 11% higher MTEB Code, same architecture, just swap model
+- **SPLADE sparse vectors** — wait for omendb native support, evaluate `granite-embedding-30m-sparse`
+- **NL enrichment** — embed NL description alongside raw code (Greptile found ~12% retrieval improvement)
+
+## Competitive Context
+
+Primary competitor: **ColGrep** (LightOn, Feb 2026). Same model (LateOn-Code-edge), same architecture (ColBERT + tree-sitter). Uses NextPlaid (PLAID algo) vs omendb (MuVERA). SQLite metadata filtering vs our BM25 hybrid. Ships with agent integrations (Claude Code, OpenCode, Codex).
+
+omengrep advantages: BM25 hybrid ranking, code-aware boost heuristics, file reference search (`file#name`, `file:line`), find_similar.
 
 ## omendb Requests
 
