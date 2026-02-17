@@ -1,7 +1,7 @@
 pub mod onnx;
 pub mod tokenizer;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ndarray::Array2;
 
 /// Configuration for an embedding model.
@@ -44,7 +44,37 @@ pub trait Embedder: Send + Sync {
     fn embed_query(&self, text: &str) -> Result<Array2<f32>>;
 }
 
-/// Create the embedder.
+/// Create the embedder, downloading model files if needed.
 pub fn create_embedder() -> Result<Box<dyn Embedder>> {
-    Ok(Box::new(onnx::OnnxEmbedder::new_with_config(MODEL)?))
+    let (model_path, tokenizer_path) = download_model_files(MODEL)?;
+    Ok(Box::new(onnx::OnnxEmbedder::new(
+        &model_path,
+        &tokenizer_path,
+        MODEL,
+    )?))
+}
+
+/// Download both model and tokenizer files, returning their local paths.
+fn download_model_files(config: &ModelConfig) -> Result<(String, String)> {
+    let api = hf_hub::api::sync::Api::new().context("Failed to create HF Hub API")?;
+    let repo = api.model(config.repo.to_string());
+
+    let model_path = repo.get(config.model_file).with_context(|| {
+        format!(
+            "Failed to download model from {}. Run 'og model install' while online.",
+            config.repo
+        )
+    })?;
+
+    let tokenizer_path = repo.get(config.tokenizer_file).with_context(|| {
+        format!(
+            "Failed to download tokenizer from {}. Run 'og model install' while online.",
+            config.repo
+        )
+    })?;
+
+    Ok((
+        model_path.to_string_lossy().into_owned(),
+        tokenizer_path.to_string_lossy().into_owned(),
+    ))
 }

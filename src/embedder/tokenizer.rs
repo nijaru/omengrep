@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use tokenizers::Tokenizer;
 
 use super::ModelConfig;
@@ -11,9 +11,8 @@ pub struct TokenizerWrapper {
 }
 
 impl TokenizerWrapper {
-    pub fn new_with_config(config: &ModelConfig) -> Result<Self> {
-        let tokenizer_path = download_tokenizer_file(config)?;
-        let base = Tokenizer::from_file(&tokenizer_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+    pub fn new(tokenizer_path: &str, config: &ModelConfig) -> Result<Self> {
+        let base = Tokenizer::from_file(tokenizer_path).map_err(|e| anyhow::anyhow!("{e}"))?;
 
         let mut doc_tokenizer = base.clone();
         doc_tokenizer
@@ -56,13 +55,4 @@ impl TokenizerWrapper {
             .encode(text, true)
             .map_err(|e| anyhow::anyhow!("{e}"))
     }
-}
-
-fn download_tokenizer_file(config: &ModelConfig) -> Result<String> {
-    let api = hf_hub::api::sync::Api::new().context("Failed to create HF Hub API")?;
-    let repo = api.model(config.repo.to_string());
-    let path = repo
-        .get(config.tokenizer_file)
-        .context("Failed to download tokenizer")?;
-    Ok(path.to_string_lossy().into_owned())
 }

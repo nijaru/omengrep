@@ -1,13 +1,15 @@
 use anyhow::Result;
 use hf_hub::api::sync::Api;
+use hf_hub::Cache;
 
 use crate::embedder;
 
 pub fn status() -> Result<()> {
     let config = embedder::MODEL;
-    let api = Api::new()?;
-    let repo = api.model(config.repo.to_string());
-    let installed = repo.get(config.model_file).is_ok() && repo.get(config.tokenizer_file).is_ok();
+    let cache = Cache::default();
+    let repo = cache.model(config.repo.to_string());
+    let installed =
+        repo.get(config.model_file).is_some() && repo.get(config.tokenizer_file).is_some();
     let marker = if installed {
         "installed"
     } else {

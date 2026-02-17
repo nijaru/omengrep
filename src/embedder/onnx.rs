@@ -15,14 +15,13 @@ pub struct OnnxEmbedder {
 }
 
 impl OnnxEmbedder {
-    pub fn new_with_config(config: &'static ModelConfig) -> Result<Self> {
-        let model_path = download_model_file(config)?;
+    pub fn new(model_path: &str, tokenizer_path: &str, config: &ModelConfig) -> Result<Self> {
         let session = ort::session::Session::builder()?
             .with_optimization_level(ort::session::builder::GraphOptimizationLevel::Level3)?
             .with_intra_threads(num_cpus())?
-            .commit_from_file(&model_path)
+            .commit_from_file(model_path)
             .context("Failed to load ONNX model")?;
-        let tokenizer = TokenizerWrapper::new_with_config(config)?;
+        let tokenizer = TokenizerWrapper::new(tokenizer_path, config)?;
         Ok(Self {
             session: Mutex::new(session),
             tokenizer,
@@ -118,15 +117,6 @@ impl Embedder for OnnxEmbedder {
             .next()
             .context("No embedding produced for query")
     }
-}
-
-fn download_model_file(config: &ModelConfig) -> Result<String> {
-    let api = hf_hub::api::sync::Api::new().context("Failed to create HF Hub API")?;
-    let repo = api.model(config.repo.to_string());
-    let path = repo
-        .get(config.model_file)
-        .context("Failed to download model")?;
-    Ok(path.to_string_lossy().into_owned())
 }
 
 fn num_cpus() -> usize {
