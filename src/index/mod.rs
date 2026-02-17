@@ -164,7 +164,6 @@ impl SemanticIndex {
             for (idx, token_emb) in token_embeddings.embeddings.iter().enumerate() {
                 let block = &prepared[start + idx].block;
 
-                // Convert ndarray to Vec<Vec<f32>> for omendb
                 let tokens: Vec<Vec<f32>> =
                     token_emb.rows().into_iter().map(|r| r.to_vec()).collect();
 
@@ -177,11 +176,8 @@ impl SemanticIndex {
                     "content": block.content,
                 });
 
-                store.store(&block.id, tokens, metadata)?;
-
-                // Index text for BM25 hybrid search (with split identifiers)
                 let bm25_text = split_identifiers(&prepared[start + idx].text);
-                store.index_text(&block.id, &bm25_text)?;
+                store.store_with_text(&block.id, tokens, &bm25_text, metadata)?;
 
                 stats.blocks += 1;
             }
@@ -640,7 +636,7 @@ fn find_block_by_name(
     let mut matches = Vec::new();
 
     for block_id in block_ids {
-        if let Some((_vec, meta)) = store.get(block_id) {
+        if let Some(meta) = store.get_metadata_by_id(block_id) {
             let block_name = meta.get("name").and_then(|v| v.as_str()).unwrap_or("");
             if block_name == name || block_name.ends_with(&format!(".{name}")) {
                 matches.push((
@@ -678,7 +674,7 @@ fn find_block_by_line(
     line: usize,
 ) -> Option<String> {
     for block_id in block_ids {
-        if let Some((_vec, meta)) = store.get(block_id) {
+        if let Some(meta) = store.get_metadata_by_id(block_id) {
             let start = meta.get("start_line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             let end = meta.get("end_line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
             if start <= line && line <= end {

@@ -1,6 +1,6 @@
 [package]
 name = "omengrep"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 license = "MIT"
 description = "Semantic code search — multi-vector embeddings + BM25"

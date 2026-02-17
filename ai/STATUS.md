@@ -2,9 +2,9 @@
 
 | Metric    | Value                         | Updated    |
 | --------- | ----------------------------- | ---------- |
-| Package   | omengrep 0.1.0 (binary: og)   | 2026-02-14 |
+| Package   | omengrep 0.0.1 (binary: og)   | 2026-02-14 |
 | Model     | LateOn-Code-edge (48d/tok)    | 2026-02-14 |
-| omendb    | 0.0.27 (multi-vector)         | 2026-02-14 |
+| omendb    | 0.0.28 (multi-vector)         | 2026-02-14 |
 | Toolchain | nightly-2025-12-04            | 2026-02-14 |
 | Tests     | 26 (12 unit + 14 integration) | 2026-02-14 |
 
