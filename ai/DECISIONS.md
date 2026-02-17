@@ -122,22 +122,54 @@ See `ai/tmp/splade-research.md` for full analysis.
 - `hygrep` / `hhg` — original name, no brand connection to omendb
 - `omengrep` as binary — too long for frequent CLI use
 
-## 9. omendb Integration Points (2026-02-14)
+## 9. omendb Integration Points (2026-02-16)
 
 **Current API usage:**
 
-- `VectorStore::multi_vector(48)` — create store
+- `VectorStore::multi_vector_with(dim, MultiVectorConfig::compact())` — create store with token pooling
 - `store.enable_text_search()` — enable BM25
-- `store.store(id, tokens, metadata)` — store multi-vector
-- `store.index_text(id, text)` — index text for BM25 (workaround)
-- `store.search_multi_with_text(query, tokens, k, filter)` — hybrid search
-- `store.get(id)` — retrieve FDE vector + metadata
-- `store.search(vec, k, filter)` — FDE-only search (for find_similar)
-- `store.delete(id)` — remove block
-- `store.flush()` — persist
+- `store.store_with_text(id, tokens, text, metadata)` — store multi-vector + BM25 text
+- `store.search_multi_with_text(query, tokens, k, filter)` — BM25 candidates + MaxSim rerank
+- `store.query_with_options(tokens, k, options)` — pure semantic MaxSim search
+- `store.get_tokens(id)` — retrieve token embeddings + metadata
+- `store.get_metadata_by_id(id)` — metadata only
+- `store.delete(id)` / `store.flush()` — remove + persist
 
 **Requested omendb changes:**
 
-1. `store_with_text()` for multi-vector — avoid separate `index_text()` call
-2. Custom tantivy tokenizer config in `TextSearchConfig` — code-aware BM25
-3. Native sparse vector support — for future SPLADE integration
+1. Custom tantivy tokenizer config in `TextSearchConfig` — code-aware BM25
+2. Native sparse vector support — for future SPLADE integration
+
+## 10. Merged BM25 + Semantic Candidates (2026-02-16)
+
+**Decision:** Run both `search_multi_with_text()` (BM25 candidates) and `query_with_options()` (semantic candidates) in parallel, merge by ID keeping higher score.
+
+**Context:** BM25-first-only search misses conceptual queries ("error handling patterns") where BM25 recall is poor. For <5K blocks, `query_with_options()` does brute-force MaxSim with 100% recall.
+
+**Implementation:** HashMap merge with Entry API — O(n) dedup. Overfetch 5x when scope filtering active, 1x without.
+
+## 11. Multi-Model Support (2026-02-16)
+
+**Decision:** `ModelConfig` struct with static registry, auto-detect model from manifest on search.
+
+**Context:** LateOn-Code-edge (17M, 48d) is fast but LateOn-Code (149M, 128d) scores 11% higher on MTEB Code. Users should be able to choose.
+
+**Implementation:** `MODELS` array with (name, config) pairs. Manifest stores model version string. Search reads manifest, resolves config, creates correct embedder. Build accepts `--model` flag. Backwards-compatible aliases kept for `EDGE_MODEL` constants.
+
+## 12. Token Pooling via compact() (2026-02-16)
+
+**Decision:** Enable `MultiVectorConfig::compact()` (pool_factor=2) for 50% token storage reduction at 100.6% quality.
+
+**Context:** omendb supports token pooling that averages adjacent token pairs, halving storage while maintaining search quality per MTEB benchmarks. Required manifest version bump (8->9) and `og build --force` to rebuild.
+
+## 13. MCP Server for Agent Integration (2026-02-16)
+
+**Decision:** Manual JSON-RPC over stdio implementing MCP protocol, no external crate.
+
+**Context:** MCP protocol is simple JSON-RPC with `initialize`, `tools/list`, `tools/call` methods. Manual implementation is ~300 lines vs adding a dependency for essentially the same code. Three tools exposed: `og_search`, `og_similar`, `og_status`.
+
+**Trade-offs:**
+
+- No streaming support (not needed for search results)
+- No prompts/resources (tools-only server)
+- Simple, zero-dependency implementation
