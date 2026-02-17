@@ -79,7 +79,7 @@ omengrep uses tree-sitter to parse source files into AST blocks (functions, clas
 
 At search time, both indexes run in parallel and results merge by ID, keeping the higher score.
 
-Runs entirely offline on CPU. Search latency is 270-440ms.
+Runs locally on CPU. Search latency is 270-440ms.
 
 Built on [omendb](https://github.com/nijaru/omendb).
 
