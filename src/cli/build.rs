@@ -3,13 +3,10 @@ use std::time::Instant;
 
 use anyhow::Result;
 
-use crate::embedder;
-use crate::index::manifest::Manifest;
-use crate::index::{self, walker, SemanticIndex, INDEX_DIR};
+use crate::index::{self, walker, SemanticIndex};
 use crate::types::EXIT_ERROR;
 
-pub fn run(path: &Path, force: bool, quiet: bool, model_name: Option<&str>) -> Result<()> {
-    let model = embedder::resolve_model(model_name);
+pub fn run(path: &Path, force: bool, quiet: bool) -> Result<()> {
     let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
     // Check for parent index that already covers this path
@@ -39,7 +36,7 @@ pub fn run(path: &Path, force: bool, quiet: bool, model_name: Option<&str>) -> R
         if index_dir.exists() {
             std::fs::remove_dir_all(&index_dir)?;
         }
-        build_index(&build_path, quiet, model)?;
+        build_index(&build_path, quiet)?;
     } else if index_exists(&build_path) {
         // Incremental update
         if !quiet {
@@ -50,12 +47,7 @@ pub fn run(path: &Path, force: bool, quiet: bool, model_name: Option<&str>) -> R
             eprintln!("\r                 \r");
         }
 
-        let effective_model = if model_name.is_some() {
-            model
-        } else {
-            resolve_index_model(&build_path)
-        };
-        let index = SemanticIndex::new_with_model(&build_path, None, effective_model)?;
+        let index = SemanticIndex::new(&build_path, None)?;
         let stale_result = index.get_stale_files(&files);
 
         match stale_result {
@@ -69,7 +61,7 @@ pub fn run(path: &Path, force: bool, quiet: bool, model_name: Option<&str>) -> R
                     if !quiet {
                         eprint!("Updating {stale_count} files...");
                     }
-                    let stats = index.update(&files, effective_model.batch_size)?;
+                    let stats = index.update(&files)?;
                     if !quiet {
                         eprintln!(
                             "\rUpdated {} blocks from {} files        ",
@@ -90,7 +82,7 @@ pub fn run(path: &Path, force: bool, quiet: bool, model_name: Option<&str>) -> R
                     }
                     let idx = SemanticIndex::new(&build_path, None)?;
                     idx.clear()?;
-                    build_index(&build_path, quiet, model)?;
+                    build_index(&build_path, quiet)?;
                 } else {
                     eprintln!("{e}");
                     std::process::exit(EXIT_ERROR);
@@ -104,7 +96,7 @@ pub fn run(path: &Path, force: bool, quiet: bool, model_name: Option<&str>) -> R
             // For now, just build fresh and clean up subdirs after
         }
 
-        build_index(&build_path, quiet, model)?;
+        build_index(&build_path, quiet)?;
 
         // Clean up subdir indexes (now superseded by parent)
         for idx in &subdir_indexes {
@@ -128,21 +120,13 @@ pub fn run(path: &Path, force: bool, quiet: bool, model_name: Option<&str>) -> R
     Ok(())
 }
 
-fn resolve_index_model(index_root: &Path) -> &'static embedder::ModelConfig {
-    let index_dir = index_root.join(INDEX_DIR);
-    match Manifest::load(&index_dir) {
-        Ok(manifest) => embedder::resolve_model_by_version(&manifest.model),
-        Err(_) => embedder::EDGE_MODEL,
-    }
-}
-
 fn index_exists(path: &Path) -> bool {
     path.join(crate::index::INDEX_DIR)
         .join("manifest.json")
         .exists()
 }
 
-fn build_index(path: &Path, quiet: bool, model: &'static embedder::ModelConfig) -> Result<()> {
+fn build_index(path: &Path, quiet: bool) -> Result<()> {
     if !quiet {
         eprint!("Scanning files...");
     }
@@ -158,7 +142,7 @@ fn build_index(path: &Path, quiet: bool, model: &'static embedder::ModelConfig) 
         return Ok(());
     }
 
-    let index = SemanticIndex::new_with_model(path, None, model)?;
+    let index = SemanticIndex::new(path, None)?;
     let t0 = Instant::now();
 
     let progress_fn = if quiet {
@@ -173,7 +157,6 @@ fn build_index(path: &Path, quiet: bool, model: &'static embedder::ModelConfig) 
 
     let stats = index.index(
         &files,
-        model.batch_size,
         progress_fn
             .as_ref()
             .map(|f| f as &dyn Fn(usize, usize, &str)),

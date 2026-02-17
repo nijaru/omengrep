@@ -5,7 +5,6 @@ use anyhow::Result;
 use serde_json::{json, Value};
 
 use crate::boost::boost_results;
-use crate::embedder;
 use crate::index::manifest::Manifest;
 use crate::index::{self, walker, SemanticIndex, INDEX_DIR};
 
@@ -181,8 +180,7 @@ fn tool_search(args: &Value) -> Result<Value, Value> {
         ));
     }
 
-    let model = resolve_index_model(&index_root);
-    let mut idx = SemanticIndex::new_with_model(&index_root, None, model)
+    let mut idx = SemanticIndex::new(&index_root, None)
         .map_err(|e| json_rpc_error(-32000, &e.to_string()))?;
 
     // Auto-update stale files
@@ -191,7 +189,7 @@ fn tool_search(args: &Value) -> Result<Value, Value> {
         .needs_update(&files)
         .map_err(|e| json_rpc_error(-32000, &e.to_string()))?;
     if stale > 0 {
-        idx.update(&files, model.batch_size)
+        idx.update(&files)
             .map_err(|e| json_rpc_error(-32000, &e.to_string()))?;
     }
 
@@ -257,8 +255,7 @@ fn tool_similar(args: &Value) -> Result<Value, Value> {
         ));
     }
 
-    let model = resolve_index_model(&index_root);
-    let idx = SemanticIndex::new_with_model(&index_root, None, model)
+    let idx = SemanticIndex::new(&index_root, None)
         .map_err(|e| json_rpc_error(-32000, &e.to_string()))?;
 
     let abs_str = abs_path.to_string_lossy();
@@ -312,14 +309,6 @@ fn tool_status(args: &Value) -> Result<Value, Value> {
     Ok(json!({
         "content": [{ "type": "text", "text": text }]
     }))
-}
-
-fn resolve_index_model(index_root: &Path) -> &'static embedder::ModelConfig {
-    let index_dir = index_root.join(INDEX_DIR);
-    match Manifest::load(&index_dir) {
-        Ok(manifest) => embedder::resolve_model_by_version(&manifest.model),
-        Err(_) => embedder::EDGE_MODEL,
-    }
 }
 
 /// Install og as an MCP server in Claude Code settings.

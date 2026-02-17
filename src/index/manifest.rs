@@ -24,19 +24,15 @@ pub struct FileEntry {
 
 impl Default for Manifest {
     fn default() -> Self {
-        Self::new(embedder::MODEL_VERSION)
+        Self {
+            version: MANIFEST_VERSION,
+            model: embedder::MODEL.version.to_string(),
+            files: HashMap::new(),
+        }
     }
 }
 
 impl Manifest {
-    pub fn new(model_version: &str) -> Self {
-        Self {
-            version: MANIFEST_VERSION,
-            model: model_version.to_string(),
-            files: HashMap::new(),
-        }
-    }
-
     pub fn load(index_dir: &Path) -> Result<Self> {
         let manifest_path = index_dir.join(MANIFEST_FILE);
 

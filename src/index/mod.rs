@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
 
-use crate::embedder::{self, Embedder, ModelConfig};
+use crate::embedder::{self, Embedder};
 use crate::extractor::Extractor;
 use crate::tokenize::split_identifiers;
 use crate::types::{Block, IndexStats, SearchResult};
@@ -29,25 +29,15 @@ pub struct SemanticIndex {
     vectors_path: String,
     search_scope: Option<String>,
     embedder: Box<dyn Embedder>,
-    token_dim: usize,
-    model_version: &'static str,
 }
 
 impl SemanticIndex {
     pub fn new(root: &Path, search_scope: Option<&Path>) -> Result<Self> {
-        Self::new_with_model(root, search_scope, embedder::EDGE_MODEL)
-    }
-
-    pub fn new_with_model(
-        root: &Path,
-        search_scope: Option<&Path>,
-        model: &'static ModelConfig,
-    ) -> Result<Self> {
         let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
         let index_dir = root.join(INDEX_DIR);
         let vectors_path = index_dir.join(VECTORS_DIR).to_string_lossy().into_owned();
         let scope = Self::compute_scope(&root, search_scope);
-        let embedder = embedder::create_embedder_with_model(model)?;
+        let embedder = embedder::create_embedder()?;
 
         Ok(Self {
             root,
@@ -55,8 +45,6 @@ impl SemanticIndex {
             vectors_path,
             search_scope: scope,
             embedder,
-            token_dim: model.token_dim,
-            model_version: model.version,
         })
     }
 
@@ -82,12 +70,11 @@ impl SemanticIndex {
     pub fn index(
         &self,
         files: &HashMap<PathBuf, String>,
-        batch_size: usize,
         on_progress: Option<&dyn Fn(usize, usize, &str)>,
     ) -> Result<IndexStats> {
         std::fs::create_dir_all(&self.index_dir)?;
         let mut manifest = Manifest::load(&self.index_dir)?;
-        manifest.model = self.model_version.to_string();
+        manifest.model = embedder::MODEL.version.to_string();
         let mut stats = IndexStats::default();
 
         // Open omendb multi-vector store
@@ -165,6 +152,7 @@ impl SemanticIndex {
         prepared.sort_by_key(|p| p.text.len());
 
         let total = prepared.len();
+        let batch_size = embedder::MODEL.batch_size;
 
         // Embed in batches
         for start in (0..total).step_by(batch_size) {
@@ -484,11 +472,7 @@ impl SemanticIndex {
     }
 
     /// Incremental update.
-    pub fn update(
-        &self,
-        files: &HashMap<PathBuf, String>,
-        batch_size: usize,
-    ) -> Result<IndexStats> {
+    pub fn update(&self, files: &HashMap<PathBuf, String>) -> Result<IndexStats> {
         let (changed, deleted) = self.get_stale_files(files)?;
 
         if changed.is_empty() && deleted.is_empty() {
@@ -526,7 +510,7 @@ impl SemanticIndex {
             .filter_map(|p| files.get(&p).map(|c| (p, c.clone())))
             .collect();
 
-        let mut stats = self.index(&changed_files, batch_size, None)?;
+        let mut stats = self.index(&changed_files, None)?;
         stats.deleted += deleted_count;
         Ok(stats)
     }
@@ -605,7 +589,7 @@ impl SemanticIndex {
             omendb::VectorStore::open(&self.vectors_path).context("Failed to open vector store")
         } else {
             omendb::VectorStore::multi_vector_with(
-                self.token_dim,
+                embedder::MODEL.token_dim,
                 omendb::MultiVectorConfig::compact(),
             )
             .persist(&self.vectors_path)

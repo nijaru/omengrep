@@ -5,9 +5,7 @@ use anyhow::{bail, Result};
 
 use crate::boost::boost_results;
 use crate::cli::output::print_results;
-use crate::embedder;
-use crate::index::manifest::Manifest;
-use crate::index::{self, walker, SemanticIndex, INDEX_DIR};
+use crate::index::{self, walker, SemanticIndex};
 use crate::types::{FileRef, OutputFormat, EXIT_ERROR, EXIT_MATCH, EXIT_NO_MATCH};
 
 pub fn run(
@@ -69,8 +67,7 @@ pub fn run(
         path.clone()
     };
 
-    let model = resolve_index_model(&index_root);
-    let mut index = SemanticIndex::new_with_model(&index_root, None, model)?;
+    let mut index = SemanticIndex::new(&index_root, None)?;
 
     if !no_index {
         // Auto-update stale files
@@ -85,7 +82,7 @@ pub fn run(
             if !quiet {
                 eprint!("Updating {stale_count} changed files...");
             }
-            let stats = index.update(&files, model.batch_size)?;
+            let stats = index.update(&files)?;
             if !quiet && stats.blocks > 0 {
                 eprintln!(" updated {} blocks", stats.blocks);
             } else if !quiet {
@@ -213,8 +210,7 @@ fn run_similar_search(
         .unwrap_or_else(|_| file_path.into());
     let abs_str = abs_path.to_string_lossy();
 
-    let model = resolve_index_model(&index_root);
-    let index = SemanticIndex::new_with_model(&index_root, None, model)?;
+    let index = SemanticIndex::new(&index_root, None)?;
     let results = index.find_similar(&abs_str, line, name, num_results)?;
 
     if !quiet {
@@ -262,8 +258,7 @@ fn build_index(path: &Path, quiet: bool) -> Result<()> {
         return Ok(());
     }
 
-    let model = resolve_index_model(path);
-    let index = SemanticIndex::new_with_model(path, None, model)?;
+    let index = SemanticIndex::new(path, None)?;
     let t0 = Instant::now();
 
     let progress_fn = if quiet {
@@ -278,7 +273,6 @@ fn build_index(path: &Path, quiet: bool) -> Result<()> {
 
     let stats = index.index(
         &files,
-        model.batch_size,
         progress_fn
             .as_ref()
             .map(|f| f as &dyn Fn(usize, usize, &str)),
@@ -419,14 +413,4 @@ fn filter_results(
     }
 
     results
-}
-
-/// Read manifest from an index root and resolve the model config.
-/// Falls back to EDGE_MODEL if manifest can't be read or model is unknown.
-fn resolve_index_model(index_root: &Path) -> &'static embedder::ModelConfig {
-    let index_dir = index_root.join(INDEX_DIR);
-    match Manifest::load(&index_dir) {
-        Ok(manifest) => embedder::resolve_model_by_version(&manifest.model),
-        Err(_) => embedder::EDGE_MODEL,
-    }
 }
