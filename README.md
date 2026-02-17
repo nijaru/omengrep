@@ -1,6 +1,6 @@
 # omengrep (og)
 
-**Semantic code search — understands what you're looking for**
+**Code search that understands what you're looking for**
 
 ```bash
 cargo install --path .
@@ -74,16 +74,16 @@ og --exclude "tests/*" "fn" .  # Exclude patterns
 
 ## How it Works
 
-og uses a hybrid approach — combining AI understanding with keyword matching.
+og combines meaning-based search with keyword matching.
 
-**Building the index:** og parses your code into logical blocks (functions, classes, methods) using tree-sitter, then creates two search indexes:
+**Indexing:** og parses your code into logical blocks (functions, classes, methods) using tree-sitter, then builds two indexes:
 
-1. **Semantic embeddings** — AI-generated representations that capture the _meaning_ of each code block, enabling searches like "authentication flow" to find `login()` and `verify_token()`.
-2. **Keyword index** — traditional text search (BM25) for exact term matching, so searching "getUserProfile" still finds that exact function.
+1. **Meaning-based** — a small AI model creates a representation of each code block that captures what the code _does_, so searching "authentication flow" finds `login()` and `verify_token()`.
+2. **Keyword-based** — traditional text matching, so searching "getUserProfile" still finds that exact function name.
 
-**Searching:** When you search, og first uses keywords to find candidate blocks, then uses semantic similarity to rerank them. Code-aware heuristics boost results where identifier names match your query. This hybrid approach is both fast (270-440ms) and accurate.
+**Searching:** og runs both searches in parallel and merges the results, keeping the best matches. It also boosts results where identifier names (like `camelCase` or `snake_case` tokens) match your query. Typical search latency is 270-440ms.
 
-Everything runs locally on CPU with a small quantized model. No GPU, no server, no cloud.
+Everything runs locally on CPU with a small model (~17MB). No GPU, no API keys, no cloud.
 
 Built on [omendb](https://github.com/nijaru/omendb).
 
