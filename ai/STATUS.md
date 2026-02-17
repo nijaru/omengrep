@@ -1,31 +1,31 @@
 ## Current State
 
-| Metric    | Value                         | Updated    |
-| --------- | ----------------------------- | ---------- |
-| Package   | omengrep 0.0.1 (binary: og)   | 2026-02-16 |
-| Models    | edge (48d), full (128d)       | 2026-02-16 |
-| omendb    | 0.0.28 (multi-vector+compact) | 2026-02-16 |
-| Toolchain | nightly-2025-12-04            | 2026-02-14 |
-| Tests     | 26 (12 unit + 14 integration) | 2026-02-16 |
+| Metric    | Value                          | Updated    |
+| --------- | ------------------------------ | ---------- |
+| Package   | omengrep 0.0.1 (binary: og)    | 2026-02-16 |
+| Models    | LateOn-Code-edge (48d, single) | 2026-02-16 |
+| omendb    | 0.0.28 (multi-vector+compact)  | 2026-02-16 |
+| Toolchain | nightly-2025-12-04             | 2026-02-14 |
+| Tests     | 26 (12 unit + 14 integration)  | 2026-02-16 |
 
 ## Architecture
 
 ```
-Build:  Scan -> Extract (tree-sitter) -> Split identifiers -> Embed (ort, LateOn-Code model) -> Store (omendb multi-vector compact) + index_text (BM25)
-Search: Resolve model from manifest -> Embed query -> BM25 candidates + semantic candidates -> Merge by ID -> Code-aware boost -> Results
+Build:  Scan -> Extract (tree-sitter) -> Split identifiers -> Embed (ort, LateOn-Code-edge) -> Store (omendb multi-vector compact) + index_text (BM25)
+Search: Embed query (query tokenizer, 256 max) -> BM25 candidates + semantic candidates -> Merge by ID -> Code-aware boost -> Results
 MCP:    og mcp (JSON-RPC/stdio) -> og_search, og_similar, og_status tools
 ```
 
 ## Recent Changes (2026-02-16)
 
-Sprint 1-4 implemented in single session:
+Sprint 1-4 complete. Post-sprint review + refactor:
 
-1. **Search quality**: MaxSim reranking in find_similar, merged BM25+semantic candidates, restored BM25 TF signal
-2. **Token pooling**: MultiVectorConfig::compact() — 50% storage, 100.6% quality
-3. **Multi-model**: ModelConfig struct, parameterized embedder, auto-detect from manifest, `--model` CLI flag
-4. **MCP server**: `og mcp` (JSON-RPC/stdio), `og install-claude-code` helper
-
-7 commits on main.
+- **Query tokenizer fix**: `embed_query` now uses query tokenizer (256 max) instead of document tokenizer (512). Affects search quality.
+- **Simplified to single model**: Removed multi-model registry, single LateOn-Code-edge config
+- **Centralized downloads**: Single `download_model_files()` with actionable error messages
+- **SearchParams struct**: Replaced 12-parameter `search::run` with struct
+- **Deduplication**: Shared `build_index`, `result_from_omendb` helper, `OutputFormat::from_flags`
+- **Build fix**: Double subdir cleanup message, stale TODO removed
 
 ## Remaining Work
 
@@ -43,9 +43,8 @@ Sprint 1-4 implemented in single session:
 
 ### Testing
 
-- Test `og build --model full` with larger model
 - Test MCP server with Claude Code (`og install-claude-code`)
-- Benchmark full vs edge model quality on real codebases
+- Rebuild indexes after query tokenizer fix (search quality changed)
 
 ### Future: SPLADE Sparse Vectors
 
@@ -62,11 +61,11 @@ Sprint 1-4 implemented in single session:
 
 | File                   | Purpose                             |
 | ---------------------- | ----------------------------------- |
-| `src/cli/search.rs`    | Search command + file ref parsing   |
-| `src/cli/build.rs`     | Build/update index                  |
+| `src/cli/search.rs`    | SearchParams, search + file refs    |
+| `src/cli/build.rs`     | Build/update index (shared helper)  |
 | `src/cli/mcp.rs`       | MCP server + install helper         |
-| `src/embedder/mod.rs`  | ModelConfig, model registry         |
-| `src/embedder/onnx.rs` | ORT inference (parameterized)       |
+| `src/embedder/mod.rs`  | MODEL config, embedder factory      |
+| `src/embedder/onnx.rs` | ORT inference (query vs doc paths)  |
 | `src/index/mod.rs`     | SemanticIndex (omendb multi-vector) |
 | `src/tokenize.rs`      | BM25 identifier splitting           |
 | `src/boost.rs`         | Code-aware ranking boosts           |

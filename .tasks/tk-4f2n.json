@@ -12,10 +12,18 @@
   "estimate": null,
   "due_date": null,
   "logs": [
-    "2026-02-14: Release pipeline created (release.yml, Homebrew formula). Blocked on omendb crates.io publish."
+    "2026-02-14: Release pipeline created (release.yml, Homebrew formula). Blocked on omendb crates.io publish.",
+    {
+      "ts": "2026-02-17T05:17:10.623Z",
+      "msg": "Sprint 1-4 complete: search quality, token pooling, multi-model, MCP server. Ready for publish after testing full model and MCP integration."
+    },
+    {
+      "ts": "2026-02-17T06:54:58.211Z",
+      "msg": "Review+refactor session: fixed query tokenizer bug (embed_query was using doc tokenizer 512 instead of query tokenizer 256), extracted SearchParams struct, deduplicated build_index/result_from_omendb/OutputFormat selection, fixed double subdir cleanup. Simplified to single model (edge only). All 26 tests pass, clippy clean."
+    }
   ],
   "created_at": "2026-02-14T21:13:55.005Z",
-  "updated_at": "2026-02-14T00:00:00.000Z",
+  "updated_at": "2026-02-17T06:54:58.211Z",
   "completed_at": null,
   "external": {}
 }
