@@ -599,7 +599,7 @@ impl SemanticIndex {
         if vectors_path.exists() || Path::new(&omen_path).exists() {
             omendb::VectorStore::open(&self.vectors_path).context("Failed to open vector store")
         } else {
-            omendb::VectorStore::multi_vector(TOKEN_DIM)
+            omendb::VectorStore::multi_vector_with(TOKEN_DIM, omendb::MultiVectorConfig::compact())
                 .persist(&self.vectors_path)
                 .context("Failed to create vector store")
         }
