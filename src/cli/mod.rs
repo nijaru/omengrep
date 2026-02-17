@@ -30,8 +30,8 @@ pub struct Cli {
     num_results: usize,
 
     /// Minimum similarity score (0 = disabled).
-    #[arg(long = "threshold", long = "min-score", default_value = "0.0")]
-    threshold: f32,
+    #[arg(long = "min-score", visible_alias = "threshold", default_value = "0.0")]
+    min_score: f32,
 
     /// JSON output.
     #[arg(short = 'j', long = "json")]
@@ -137,7 +137,7 @@ pub fn run() -> anyhow::Result<()> {
             cli.query.as_deref(),
             &cli.path,
             cli.num_results,
-            cli.threshold,
+            cli.min_score,
             cli.json,
             cli.files_only,
             cli.compact,

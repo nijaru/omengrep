@@ -22,6 +22,9 @@ pub const VECTORS_DIR: &str = "vectors";
 /// Block types that are documentation, not code.
 const DOC_BLOCK_TYPES: &[&str] = &["text", "section"];
 
+/// When search scope filters results, over-fetch by this factor to compensate.
+const SCOPE_OVERFETCH: usize = 5;
+
 /// Manages semantic search index using omendb.
 pub struct SemanticIndex {
     root: PathBuf,
@@ -228,7 +231,11 @@ impl SemanticIndex {
         let token_refs: Vec<&[f32]> = tokens.iter().map(|v| v.as_slice()).collect();
 
         // Over-fetch more when scope filtering will discard results
-        let overfetch = if self.search_scope.is_some() { 5 } else { 1 };
+        let overfetch = if self.search_scope.is_some() {
+            SCOPE_OVERFETCH
+        } else {
+            1
+        };
         let search_k = k.saturating_mul(overfetch);
 
         // Run both BM25+MaxSim and pure semantic search, merge by ID

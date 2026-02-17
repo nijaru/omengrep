@@ -22,7 +22,17 @@ pub fn run() -> Result<()> {
 
         let request: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(_) => {
+                let reply = json!({
+                    "jsonrpc": "2.0",
+                    "id": null,
+                    "error": json_rpc_error(-32700, "Parse error"),
+                });
+                let out = serde_json::to_string(&reply)?;
+                writeln!(stdout, "{out}")?;
+                stdout.flush()?;
+                continue;
+            }
         };
 
         let id = request.get("id").cloned();
@@ -157,6 +167,20 @@ fn handle_tools_call(params: &Value) -> Result<Value, Value> {
     }
 }
 
+fn format_results(results: &[crate::types::SearchResult]) -> String {
+    results
+        .iter()
+        .map(|r| {
+            let content = r.content.as_deref().unwrap_or("");
+            format!(
+                "## {}:{} ({}, score: {:.2})\n```\n{}\n```",
+                r.file, r.line, r.name, r.score, content
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 fn tool_search(args: &Value) -> Result<Value, Value> {
     let query = args
         .get("query")
@@ -166,7 +190,8 @@ fn tool_search(args: &Value) -> Result<Value, Value> {
     let num_results = args
         .get("num_results")
         .and_then(|n| n.as_u64())
-        .unwrap_or(10) as usize;
+        .unwrap_or(10)
+        .min(100) as usize;
 
     let path = Path::new(path_str)
         .canonicalize()
@@ -200,20 +225,8 @@ fn tool_search(args: &Value) -> Result<Value, Value> {
 
     boost_results(&mut results, query);
 
-    let text = results
-        .iter()
-        .map(|r| {
-            let content = r.content.as_deref().unwrap_or("");
-            format!(
-                "## {}:{} ({}, score: {:.2})\n```\n{}\n```",
-                r.file, r.line, r.name, r.score, content
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n");
-
     Ok(json!({
-        "content": [{ "type": "text", "text": text }]
+        "content": [{ "type": "text", "text": format_results(&results) }]
     }))
 }
 
@@ -225,7 +238,8 @@ fn tool_similar(args: &Value) -> Result<Value, Value> {
     let num_results = args
         .get("num_results")
         .and_then(|n| n.as_u64())
-        .unwrap_or(10) as usize;
+        .unwrap_or(10)
+        .min(100) as usize;
 
     // Parse reference: file#name, file:line, or file
     let (file_path, line, name) = if let Some(hash_pos) = reference.rfind('#') {
@@ -263,20 +277,8 @@ fn tool_similar(args: &Value) -> Result<Value, Value> {
         .find_similar(&abs_str, line, name, num_results)
         .map_err(|e| json_rpc_error(-32000, &e.to_string()))?;
 
-    let text = results
-        .iter()
-        .map(|r| {
-            let content = r.content.as_deref().unwrap_or("");
-            format!(
-                "## {}:{} ({}, score: {:.2})\n```\n{}\n```",
-                r.file, r.line, r.name, r.score, content
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n");
-
     Ok(json!({
-        "content": [{ "type": "text", "text": text }]
+        "content": [{ "type": "text", "text": format_results(&results) }]
     }))
 }
 
@@ -317,7 +319,7 @@ pub fn install_claude_code() -> Result<()> {
         .ok()
         .and_then(|p| p.canonicalize().ok())
         .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "og".to_string());
+        .ok_or_else(|| anyhow::anyhow!("Could not determine og executable path"))?;
 
     let home =
         std::env::var("HOME").map_err(|_| anyhow::anyhow!("Could not determine home directory"))?;
@@ -349,7 +351,11 @@ pub fn install_claude_code() -> Result<()> {
         );
 
     let content = serde_json::to_string_pretty(&config)?;
-    std::fs::write(&config_path, content)?;
+
+    // Atomic write: temp file + rename to prevent corruption
+    let tmp_path = config_path.with_extension("json.tmp");
+    std::fs::write(&tmp_path, &content)?;
+    std::fs::rename(&tmp_path, &config_path)?;
 
     println!("Installed og MCP server in {}", config_path.display());
     println!("Restart Claude Code to activate.");

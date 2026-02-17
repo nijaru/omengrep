@@ -74,8 +74,10 @@ impl Manifest {
     pub fn save(&self, index_dir: &Path) -> Result<()> {
         std::fs::create_dir_all(index_dir)?;
         let manifest_path = index_dir.join(MANIFEST_FILE);
+        let tmp_path = index_dir.join(".manifest.json.tmp");
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(manifest_path, content)?;
+        std::fs::write(&tmp_path, &content)?;
+        std::fs::rename(&tmp_path, &manifest_path)?;
         Ok(())
     }
 }
