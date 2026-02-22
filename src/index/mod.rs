@@ -578,7 +578,7 @@ impl SemanticIndex {
             omendb::VectorStore::multi_vector_with(
                 embedder::MODEL.token_dim,
                 omendb::MultiVectorConfig::compact(),
-            )
+            )?
             .persist(&self.vectors_path)
             .context("Failed to create vector store")
         }

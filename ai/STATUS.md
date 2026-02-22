@@ -4,7 +4,7 @@
 | --------- | ------------------------------ | ---------- |
 | Package   | omengrep 0.0.1 (binary: og)    | 2026-02-16 |
 | Models    | LateOn-Code-edge (48d, single) | 2026-02-16 |
-| omendb    | 0.0.28 (multi-vector+compact)  | 2026-02-16 |
+| omendb    | 0.0.29 (multi-vector+compact)  | 2026-02-21 |
 | Toolchain | nightly-2025-12-04             | 2026-02-14 |
 | Tests     | 26 (12 unit + 14 integration)  | 2026-02-16 |
 

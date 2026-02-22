@@ -25,7 +25,7 @@ tokenizers = { version = "0.22", default-features = false, features = ["onig"] }
 ndarray = "0.17"
 
 # Vector database
-omendb = "0.0.28"
+omendb = "0.0.29"
 
 # Tree-sitter
 tree-sitter = "0.25"
