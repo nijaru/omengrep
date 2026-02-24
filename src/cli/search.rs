@@ -81,17 +81,15 @@ pub fn run(params: &SearchParams) -> Result<()> {
         let metadata = walker::scan_metadata(&index_root)?;
         let (stale_count, stats) = index.check_and_update(&metadata)?;
 
-        if stale_count > 0 {
-            if !params.quiet {
-                if let Some(stats) = &stats {
-                    if stats.blocks > 0 {
-                        eprintln!(
-                            "Updating {stale_count} changed files... {} blocks",
-                            stats.blocks
-                        );
-                    } else {
-                        eprintln!("Updating {stale_count} changed files... done");
-                    }
+        if stale_count > 0 && !params.quiet {
+            if let Some(stats) = &stats {
+                if stats.blocks > 0 {
+                    eprintln!(
+                        "Updating {stale_count} changed files... {} blocks",
+                        stats.blocks
+                    );
+                } else {
+                    eprintln!("Updating {stale_count} changed files... done");
                 }
             }
         }
