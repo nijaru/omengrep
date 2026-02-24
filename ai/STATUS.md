@@ -42,6 +42,13 @@ MCP:    og mcp (JSON-RPC/stdio) -> og_search, og_similar, og_status tools
 - **Extractor reuse**: rayon `map_init()` reuses tree-sitter parsers per thread
 - **Lazy regexes**: markdown fence_re/header_re compiled once via LazyLock
 
+### Review Fixes
+
+- **Nested dedup**: only removes container types (class/struct/module/impl), preserving decorated_definition wrappers
+- **mtime race**: `scan()` returns `(content, mtime)` with stat-before-read; `check_and_update()` also stats before read. Eliminates post-embedding `file_mtime()` call.
+- **Manifest dedup**: extracted `mtime_diff()` helper; removed double manifest load in `check_and_update()`
+- **Stop-list**: lowercased `"None"` → `"none"` (split_word outputs lowercase)
+
 ### Skipped
 
 - Phase 4a (Mutex removal on ONNX session): `ort::Session::run` requires `&mut self`, Mutex is correct for `&self` trait + Send+Sync. Uncontended lock cost is negligible.
