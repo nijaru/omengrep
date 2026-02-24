@@ -1811,9 +1811,9 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "omendb"
-version = "0.0.29"
+version = "0.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e8214719edc68bf2319216defa5dc503922e21c250fd1cdadc4cbfd81391b27"
+checksum = "6b539aada9493ca0ea6519e939ee23108b262353e9209d96d7871fb76c1362f0"
 dependencies = [
  "anyhow",
  "arc-swap",
