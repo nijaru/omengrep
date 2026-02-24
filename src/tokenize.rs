@@ -43,6 +43,102 @@ fn split_word(word: &str) -> Vec<String> {
     }
 }
 
+/// Language keywords that add noise to BM25 without discriminative value.
+const KEYWORD_STOP_LIST: &[&str] = &[
+    "pub",
+    "fn",
+    "let",
+    "mut",
+    "const",
+    "use",
+    "mod",
+    "impl",
+    "self",
+    "crate",
+    "super",
+    "struct",
+    "enum",
+    "trait",
+    "type",
+    "where",
+    "async",
+    "await",
+    "move",
+    "ref",
+    "return",
+    "match",
+    "loop",
+    "while",
+    "for",
+    "break",
+    "continue",
+    "unsafe",
+    "static",
+    "extern",
+    "dyn",
+    "true",
+    "false",
+    "def",
+    "class",
+    "import",
+    "from",
+    "pass",
+    "None",
+    "True",
+    "False",
+    "elif",
+    "else",
+    "try",
+    "except",
+    "finally",
+    "with",
+    "yield",
+    "lambda",
+    "raise",
+    "assert",
+    "del",
+    "global",
+    "func",
+    "var",
+    "package",
+    "defer",
+    "chan",
+    "select",
+    "case",
+    "default",
+    "goto",
+    "range",
+    "void",
+    "int",
+    "char",
+    "float",
+    "double",
+    "long",
+    "short",
+    "unsigned",
+    "signed",
+    "bool",
+    "string",
+    "null",
+    "nil",
+    "this",
+    "new",
+    "delete",
+    "throw",
+    "catch",
+    "throws",
+    "extends",
+    "implements",
+    "interface",
+    "abstract",
+    "final",
+    "override",
+    "virtual",
+    "protected",
+    "private",
+    "public",
+];
+
 /// Split code identifiers for BM25 text search.
 ///
 /// Finds camelCase and snake_case identifiers in the text and appends
@@ -50,6 +146,7 @@ fn split_word(word: &str) -> Vec<String> {
 /// "get user profile" against identifiers like `getUserProfile`.
 ///
 /// The original text is preserved — split terms are appended at the end.
+/// Language keywords are filtered from split terms to reduce noise.
 pub fn split_identifiers(text: &str) -> String {
     let mut extra: Vec<String> = Vec::new();
 
@@ -58,7 +155,15 @@ pub fn split_identifiers(text: &str) -> String {
         if word.len() < 4 {
             continue;
         }
-        extra.extend(split_word(word));
+        if KEYWORD_STOP_LIST.contains(&word) {
+            continue;
+        }
+        let parts = split_word(word);
+        for part in parts {
+            if !KEYWORD_STOP_LIST.contains(&part.as_str()) {
+                extra.push(part);
+            }
+        }
     }
 
     if extra.is_empty() {

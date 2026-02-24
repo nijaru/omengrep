@@ -205,10 +205,16 @@ fn run_similar_search(
     let abs_str = abs_path.to_string_lossy();
 
     let index = SemanticIndex::new(&index_root, None)?;
-    let results = index.find_similar(&abs_str, line, name, num_results)?;
+    let mut results = index.find_similar(&abs_str, line, name, num_results)?;
 
     if !quiet {
         eprintln!("\r                                \r");
+    }
+
+    // Boost similar results using the reference name as query
+    let boost_query = name.unwrap_or("");
+    if !boost_query.is_empty() {
+        boost_results(&mut results, boost_query);
     }
 
     if results.is_empty() {

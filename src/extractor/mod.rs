@@ -110,8 +110,59 @@ impl Extractor {
             return Ok(fallback_head(rel_path, content));
         }
 
+        // Remove outer blocks whose content is fully covered by inner blocks.
+        // E.g., a class block contains all its method blocks — keep methods, drop class.
+        blocks = remove_nested_blocks(blocks);
+
         Ok(blocks)
     }
+}
+
+/// Remove blocks that are fully contained within other blocks.
+/// When a parent block (e.g., class) contains children (e.g., methods),
+/// drop the parent to avoid duplicate content in the index.
+fn remove_nested_blocks(mut blocks: Vec<Block>) -> Vec<Block> {
+    if blocks.len() <= 1 {
+        return blocks;
+    }
+
+    // Sort by start byte (start_line as proxy), then by size descending
+    blocks.sort_by(|a, b| {
+        a.start_line
+            .cmp(&b.start_line)
+            .then(b.end_line.cmp(&a.end_line))
+    });
+
+    let mut keep = vec![true; blocks.len()];
+
+    for i in 0..blocks.len() {
+        if !keep[i] {
+            continue;
+        }
+        // Check if block i fully contains any later blocks
+        let mut has_children = false;
+        for j in (i + 1)..blocks.len() {
+            if !keep[j] {
+                continue;
+            }
+            if blocks[j].start_line >= blocks[i].start_line
+                && blocks[j].end_line <= blocks[i].end_line
+                && (blocks[j].start_line != blocks[i].start_line
+                    || blocks[j].end_line != blocks[i].end_line)
+            {
+                has_children = true;
+            }
+        }
+        if has_children {
+            keep[i] = false;
+        }
+    }
+
+    blocks
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, b)| if keep[i] { Some(b) } else { None })
+        .collect()
 }
 
 /// Extract the name identifier from a tree-sitter node.

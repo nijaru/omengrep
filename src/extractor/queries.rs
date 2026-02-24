@@ -37,6 +37,7 @@ fn get_query_for_language(lang: &str) -> Option<&'static str> {
             r#"
             (function_definition) @function
             (class_definition) @class
+            (decorated_definition) @function
             "#
         }
         "javascript" => {
@@ -139,21 +140,23 @@ fn get_query_for_language(lang: &str) -> Option<&'static str> {
             (protocol_declaration) @class
             "#
         }
-        "elixir" => "(call) @function",
+        "elixir" => {
+            r#"
+            (call
+              target: (identifier) @_name
+              (#match? @_name "^(def|defp|defmacro|defmacrop|defmodule)$")
+            ) @function
+            "#
+        }
         "zig" => {
             r#"
             (function_declaration) @function
             (struct_declaration) @class
             "#
         }
-        "yaml" => "(block_mapping_pair) @item",
-        "toml" => {
-            r#"
-            (table) @item
-            (pair) @item
-            "#
-        }
-        "json" => "(pair) @item",
+        "yaml" => return None, // fallback_head — too many tiny blocks from tree-sitter
+        "toml" => "(table) @item",
+        "json" => return None, // fallback_head — JSON isn't semantically searchable
         "html" => {
             r#"
             (element) @element

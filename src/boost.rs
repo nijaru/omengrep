@@ -52,16 +52,16 @@ pub fn boost_results(results: &mut [SearchResult], query: &str) {
         }
 
         // 2. Type boost
-        let type_matches_query =
-            (query_wants_class && matches!(block_type.as_str(), "class" | "struct"))
-                || (query_wants_func && matches!(block_type.as_str(), "function" | "method"));
+        let type_matches_query = (query_wants_class
+            && matches!(block_type.as_str(), "class" | "struct"))
+            || (query_wants_func && matches!(block_type.as_str(), "function" | "method"));
 
         if type_matches_query {
             boost *= 1.5;
         } else if !query_wants_class && !query_wants_func {
             boost *= match block_type.as_str() {
-                "class" | "struct" => 1.3,
-                "function" | "method" => 1.2,
+                "function" | "method" => 1.3,
+                "class" | "struct" => 1.2,
                 "interface" | "type" | "trait" | "enum" => 1.1,
                 _ => 1.0,
             };
@@ -87,4 +87,7 @@ pub fn boost_results(results: &mut [SearchResult], query: &str) {
     });
 }
 
-const SHORT_WHITELIST: &[&str] = &["db", "fs", "io", "ui", "id", "ok", "fn", "rx", "tx", "api"];
+const SHORT_WHITELIST: &[&str] = &[
+    "db", "fs", "io", "ui", "id", "ok", "fn", "rx", "tx", "api", "vm", "os", "gc", "ip", "sql",
+    "cli", "tls", "rpc",
+];
