@@ -13,8 +13,13 @@ const CHUNK_OVERLAP: usize = 50; // ~50 tokens overlap
 const MIN_CHUNK_SIZE: usize = 30; // minimum tokens for a chunk
 
 /// Sentence boundary: split after `.` `!` `?` followed by whitespace.
-static SENTENCE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[.!?]\s+").unwrap());
+static SENTENCE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[.!?]\s+").unwrap());
+
+/// Fenced code block opener/closer.
+static FENCE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(`{3,}|~{3,})(\w+)?").unwrap());
+
+/// Markdown header line.
+static HEADER_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(#{1,6})\s+(.+)$").unwrap());
 
 /// Extract blocks from a text/documentation file.
 pub fn extract_text_blocks(file_path: &str, content: &str) -> Vec<Block> {
@@ -169,8 +174,8 @@ fn parse_markdown_structure(content: &str) -> Vec<MarkdownSection> {
     let mut code_block_lang: Option<String> = None;
     let mut code_block_lines: Vec<&str> = Vec::new();
 
-    let fence_re = Regex::new(r"^(`{3,}|~{3,})(\w+)?").unwrap();
-    let header_re = Regex::new(r"^(#{1,6})\s+(.+)$").unwrap();
+    let fence_re = &*FENCE_RE;
+    let header_re = &*HEADER_RE;
 
     let save_section = |headers: &[String],
                         content_lines: &[&str],

@@ -114,33 +114,38 @@ impl SemanticIndex {
 
         store.flush()?;
 
-        // Extract blocks in parallel
+        // Extract blocks in parallel, reusing Extractor per thread
         let all_blocks: Vec<(Vec<Block>, String, String)> = to_process
             .par_iter()
-            .map(|(_path, content, rel_path, file_hash)| {
-                let mut extractor = Extractor::new();
-                let blocks = extractor.extract(rel_path, content).unwrap_or_default();
-                (blocks, rel_path.clone(), file_hash.clone())
-            })
+            .map_init(
+                Extractor::new,
+                |extractor, (_path, content, rel_path, file_hash)| {
+                    let blocks = extractor.extract(rel_path, content).unwrap_or_default();
+                    (blocks, rel_path.clone(), file_hash.clone())
+                },
+            )
             .collect();
 
-        // Flatten blocks, compute embedding text once, track file stats
+        // Flatten blocks, compute embedding text once, track file stats.
+        // Store (file_idx, block_idx) to reference blocks without cloning.
         struct PreparedBlock {
-            block: Block,
+            file_idx: usize,
+            block_idx: usize,
             text: String,
         }
 
         let mut prepared: Vec<PreparedBlock> = Vec::new();
-        for (blocks, _rel_path, _file_hash) in &all_blocks {
+        for (file_idx, (blocks, _rel_path, _file_hash)) in all_blocks.iter().enumerate() {
             if blocks.is_empty() {
                 stats.errors += 1;
             } else {
                 stats.files += 1;
             }
-            for block in blocks {
+            for (block_idx, block) in blocks.iter().enumerate() {
                 let text = block.embedding_text();
                 prepared.push(PreparedBlock {
-                    block: block.clone(),
+                    file_idx,
+                    block_idx,
                     text,
                 });
             }
@@ -175,7 +180,8 @@ impl SemanticIndex {
             let token_embeddings = self.embedder.embed_documents(&batch_refs)?;
 
             for (idx, token_emb) in token_embeddings.embeddings.iter().enumerate() {
-                let block = &prepared[start + idx].block;
+                let p = &prepared[start + idx];
+                let block = &all_blocks[p.file_idx].0[p.block_idx];
 
                 let tokens: Vec<Vec<f32>> =
                     token_emb.rows().into_iter().map(|r| r.to_vec()).collect();
@@ -189,7 +195,7 @@ impl SemanticIndex {
                     "content": block.content,
                 });
 
-                let bm25_text = split_identifiers(&prepared[start + idx].text);
+                let bm25_text = split_identifiers(&p.text);
                 store.store_with_text(&block.id, tokens, &bm25_text, metadata)?;
 
                 stats.blocks += 1;
