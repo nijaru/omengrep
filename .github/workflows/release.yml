@@ -95,7 +95,7 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Build
-        run: cargo build --release
+        run: cargo check
 
   # ============================================================================
   # STAGE 2: Build binaries (parallel)
@@ -103,7 +103,7 @@ jobs:
 
   build-binaries:
     name: Build ${{ matrix.target }}
-    needs: verify
+    # We no longer 'need' verify here so it can run in parallel with clippy/fmt
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
