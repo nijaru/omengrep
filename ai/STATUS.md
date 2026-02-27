@@ -19,13 +19,7 @@ MCP:    og mcp (JSON-RPC/stdio) -> og_search, og_similar, og_status tools
 
 ## Active Work
 
-### Publish to crates.io (tk-4f2n)
-
-- Blocked on omendb crates.io publish (user is omendb maintainer)
-- omendb 0.0.30 in use (write regression fixed)
-- Release pipeline ready: `.github/workflows/release.yml`
-- Homebrew formula ready: `nijaru/homebrew-tap/Formula/og.rb`
-- Tag `v0.0.1` when unblocked
+None.
 
 ## Remaining Work
 
@@ -36,11 +30,11 @@ MCP:    og mcp (JSON-RPC/stdio) -> og_search, og_similar, og_status tools
 
 Performance bench: `benches/omendb.rs` (divan)
 
-| Benchmark       | Baseline (0.0.30) | Current       | delta   |
-| --------------- | ----------------- | ------------- | ------- |
-| search_hybrid   | 392.3 us          | 404.5 us      | +3%     |
-| search_semantic | 422.0 us          | 539.4 us      | +28%    |
-| store_write     | 5.25 ms           | 6.169 ms      | +18%    |
+| Benchmark       | Baseline (0.0.30) | Current  | delta |
+| --------------- | ----------------- | -------- | ----- |
+| search_hybrid   | 392.3 us          | 404.5 us | +3%   |
+| search_semantic | 422.0 us          | 539.4 us | +28%  |
+| store_write     | 5.25 ms           | 6.169 ms | +18%  |
 
 Quality bench: `bench/quality.py` (CodeSearchNet)
 
