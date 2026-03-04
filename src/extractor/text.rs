@@ -303,7 +303,7 @@ fn extract_markdown_blocks(file_path: &str, content: &str) -> Vec<Block> {
         let chunks = split_text_recursive(&section.content, CHUNK_SIZE);
         let chunks = add_overlap(&chunks, CHUNK_OVERLAP);
 
-        for chunk in &chunks {
+        for (chunk_idx, chunk) in chunks.iter().enumerate() {
             if estimate_tokens(chunk) < MIN_CHUNK_SIZE {
                 continue;
             }
@@ -320,7 +320,7 @@ fn extract_markdown_blocks(file_path: &str, content: &str) -> Vec<Block> {
             };
 
             blocks.push(Block {
-                id: Block::make_id(file_path, section.start_line, &name),
+                id: Block::make_id(file_path, section.start_line + chunk_idx, &name),
                 file: file_path.to_string(),
                 block_type: block_type.to_string(),
                 name,

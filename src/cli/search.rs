@@ -45,7 +45,6 @@ pub fn run(params: &SearchParams) -> Result<()> {
 
     // Walk up to find existing index
     let (index_root, existing_index) = index::find_index_root(&path);
-    let search_path = path.clone();
 
     if existing_index.is_none() {
         // Check for auto-build
@@ -74,7 +73,7 @@ pub fn run(params: &SearchParams) -> Result<()> {
 
     if !params.no_index {
         // Auto-update stale files using metadata-only scan (no content reads)
-        if !params.quiet && index_root != search_path {
+        if !params.quiet && index_root != path {
             eprintln!("Using index at {}", index_root.display());
         }
 
@@ -100,7 +99,7 @@ pub fn run(params: &SearchParams) -> Result<()> {
         eprint!("Searching...");
     }
     let t0 = Instant::now();
-    index.set_search_scope(Some(&search_path));
+    index.set_search_scope(Some(&path));
     let mut results = index.search(query, params.num_results)?;
     let search_time = t0.elapsed();
     if !params.quiet {

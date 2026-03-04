@@ -289,7 +289,8 @@ impl SemanticIndex {
                     .get("file")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                if !file.starts_with(scope.as_str()) {
+                let scope = scope.as_str();
+                if file != scope && !file.starts_with(&format!("{scope}/")) {
                     continue;
                 }
             }
@@ -371,7 +372,8 @@ impl SemanticIndex {
                     .get("file")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                if !file.starts_with(scope.as_str()) {
+                let scope = scope.as_str();
+                if file != scope && !file.starts_with(&format!("{scope}/")) {
                     continue;
                 }
             }

@@ -70,14 +70,13 @@ fn print_default(results: &[SearchResult], show_score: bool) {
         let line_num = r.line.to_string();
 
         if show_score {
-            let score_pct = ((r.score * 100.0) as i32).to_string();
             println!(
-                "{}:{} {} {} ({}% similar)",
+                "{}:{} {} {} (score: {:.3})",
                 r.file.cyan(),
                 line_num.yellow(),
                 r.block_type.dimmed(),
                 r.name.bold(),
-                score_pct.magenta()
+                r.score
             );
         } else {
             println!(
