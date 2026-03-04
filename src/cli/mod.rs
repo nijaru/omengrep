@@ -3,6 +3,7 @@ pub mod clean;
 pub mod list;
 pub mod mcp;
 pub mod model;
+pub mod outline;
 pub mod output;
 pub mod search;
 pub mod status;
@@ -109,6 +110,15 @@ enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Show block structure of an indexed file.
+    Outline {
+        /// File or directory to outline.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// JSON output.
+        #[arg(short = 'j', long = "json")]
+        json: bool,
+    },
     /// Show embedding model status.
     Model {
         #[command(subcommand)]
@@ -135,6 +145,7 @@ pub fn run() -> anyhow::Result<()> {
         Some(Command::Status { path }) => status::run(&path),
         Some(Command::Clean { path, recursive }) => clean::run(&path, recursive),
         Some(Command::List { path }) => list::run(&path),
+        Some(Command::Outline { path, json }) => outline::run(&path, json),
         Some(Command::Model { action }) => match action {
             Some(ModelAction::Install) => model::install(),
             None => model::status(),
