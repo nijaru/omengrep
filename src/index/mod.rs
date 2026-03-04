@@ -191,8 +191,12 @@ impl SemanticIndex {
                 let p = &prepared[start + idx];
                 let block = &all_blocks[p.file_idx].0[p.block_idx];
 
-                let tokens: Vec<Vec<f32>> =
-                    token_emb.rows().into_iter().map(|r| r.to_vec()).collect();
+                let tokens: Vec<Vec<f32>> = token_emb
+                    .rows()
+                    .into_iter()
+                    .take(embedder::MAX_STORED_TOKENS)
+                    .map(|r| r.to_vec())
+                    .collect();
 
                 let metadata = serde_json::json!({
                     "file": block.file,

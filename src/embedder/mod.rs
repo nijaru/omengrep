@@ -16,6 +16,12 @@ pub struct ModelConfig {
     pub batch_size: usize,
 }
 
+/// Maximum token embeddings stored per document.
+/// omendb's default VectorStore limit is 512; we cap here to prevent store errors.
+/// doc_max_length may exceed this — the model attends to the full input but we
+/// truncate its output before storing.
+pub const MAX_STORED_TOKENS: usize = 512;
+
 /// LateOn-Code-edge: 17M params, 48d/token, INT8 ONNX.
 pub const MODEL: &ModelConfig = &ModelConfig {
     repo: "lightonai/LateOn-Code-edge",
