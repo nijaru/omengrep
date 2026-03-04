@@ -254,7 +254,7 @@ impl SemanticIndex {
         let search_k = k.saturating_mul(overfetch);
 
         // Run both BM25+MaxSim and pure semantic search, merge by ID
-        let bm25_query = split_identifiers(query);
+        let bm25_query = crate::synonyms::expand_query(&split_identifiers(query));
         let bm25_results =
             store.search_multi_with_text(&bm25_query, &token_refs, search_k, None)?;
         let semantic_results =
