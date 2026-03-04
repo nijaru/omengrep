@@ -69,20 +69,20 @@ pub enum OutputFormat {
     Default,
     /// JSON output.
     Json,
-    /// Compact: no content in output.
-    Compact,
+    /// NoContent: JSON without content field.
+    NoContent,
     /// Files only: unique file paths.
     FilesOnly,
 }
 
 impl OutputFormat {
-    pub fn from_flags(json: bool, files_only: bool, compact: bool) -> Self {
+    pub fn from_flags(json: bool, files_only: bool, no_content: bool) -> Self {
         if files_only {
             Self::FilesOnly
         } else if json {
             Self::Json
-        } else if compact {
-            Self::Compact
+        } else if no_content {
+            Self::NoContent
         } else {
             Self::Default
         }

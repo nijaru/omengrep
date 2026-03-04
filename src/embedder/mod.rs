@@ -22,7 +22,7 @@ pub const MODEL: &ModelConfig = &ModelConfig {
     model_file: "model.onnx",
     tokenizer_file: "tokenizer.json",
     token_dim: 48,
-    doc_max_length: 512,
+    doc_max_length: 1024,
     query_max_length: 256,
     version: "lateon-code-edge-v1",
     batch_size: 64,

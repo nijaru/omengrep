@@ -8,6 +8,7 @@ pub fn print_results(
     format: OutputFormat,
     show_score: bool,
     root: Option<&Path>,
+    context_lines: usize,
 ) {
     let results: Vec<SearchResult> = results
         .iter()
@@ -25,8 +26,8 @@ pub fn print_results(
     match format {
         OutputFormat::FilesOnly => print_files_only(&results),
         OutputFormat::Json => print_json(&results, false),
-        OutputFormat::Compact => print_json(&results, true),
-        OutputFormat::Default => print_default(&results, show_score),
+        OutputFormat::NoContent => print_json(&results, true),
+        OutputFormat::Default => print_default(&results, show_score, context_lines),
     }
 }
 
@@ -63,7 +64,7 @@ fn print_json(results: &[SearchResult], compact: bool) {
     }
 }
 
-fn print_default(results: &[SearchResult], show_score: bool) {
+fn print_default(results: &[SearchResult], show_score: bool, context_lines: usize) {
     use owo_colors::OwoColorize;
 
     for r in results {
@@ -88,23 +89,24 @@ fn print_default(results: &[SearchResult], show_score: bool) {
             );
         }
 
-        // Content preview (first 3 non-empty lines)
-        if let Some(content) = &r.content {
-            let preview_lines: Vec<&str> = content
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .take(3)
-                .collect();
-            for line in preview_lines {
-                let truncated = if line.len() > 80 {
-                    let end = line.floor_char_boundary(77);
-                    format!("{}...", &line[..end])
-                } else {
-                    line.to_string()
-                };
-                println!("  {}", truncated.dimmed());
+        if context_lines > 0 {
+            if let Some(content) = &r.content {
+                let preview_lines: Vec<&str> = content
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .take(context_lines)
+                    .collect();
+                for line in preview_lines {
+                    let truncated = if line.len() > 120 {
+                        let end = line.floor_char_boundary(117);
+                        format!("{}...", &line[..end])
+                    } else {
+                        line.to_string()
+                    };
+                    println!("  {}", truncated.dimmed());
+                }
+                println!();
             }
-            println!();
         }
     }
 }

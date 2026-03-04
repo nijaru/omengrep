@@ -19,6 +19,8 @@ pub struct SearchParams<'a> {
     pub exclude: &'a [String],
     pub code_only: bool,
     pub no_index: bool,
+    pub context_lines: usize,
+    pub regex: Option<&'a str>,
 }
 
 pub fn run(params: &SearchParams) -> Result<()> {
@@ -31,7 +33,13 @@ pub fn run(params: &SearchParams) -> Result<()> {
 
     // Check if query is a file reference
     if let Some(file_ref) = parse_file_reference(query) {
-        return run_similar_search(file_ref, params.num_results, params.format, params.quiet);
+        return run_similar_search(
+            file_ref,
+            params.num_results,
+            params.format,
+            params.quiet,
+            params.context_lines,
+        );
     }
 
     let path = params
@@ -122,7 +130,28 @@ pub fn run(params: &SearchParams) -> Result<()> {
         results.retain(|r| r.score >= params.threshold);
     }
 
-    print_results(&results, params.format, false, Some(&path));
+    // Regex filter
+    if let Some(pattern) = params.regex {
+        match regex::Regex::new(pattern) {
+            Ok(re) => {
+                results.retain(|r| {
+                    r.content.as_deref().map_or(false, |c| re.is_match(c)) || re.is_match(&r.name)
+                });
+            }
+            Err(e) => {
+                eprintln!("Invalid regex: {e}");
+                std::process::exit(EXIT_ERROR);
+            }
+        }
+    }
+
+    print_results(
+        &results,
+        params.format,
+        false,
+        Some(&path),
+        params.context_lines,
+    );
 
     if !params.quiet && !matches!(params.format, OutputFormat::Json | OutputFormat::FilesOnly) {
         let result_word = if results.len() == 1 {
@@ -150,6 +179,7 @@ fn run_similar_search(
     num_results: usize,
     format: OutputFormat,
     quiet: bool,
+    context_lines: usize,
 ) -> Result<()> {
     let (file_path, line, name) = match &file_ref {
         FileRef::ByName { path, name } => (path.as_str(), None, Some(name.as_str())),
@@ -221,7 +251,7 @@ fn run_similar_search(
         std::process::exit(EXIT_NO_MATCH);
     }
 
-    print_results(&results, format, true, Some(&index_root));
+    print_results(&results, format, true, Some(&index_root), context_lines);
 
     if !quiet && !matches!(format, OutputFormat::Json) {
         let result_word = if results.len() == 1 {

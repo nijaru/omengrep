@@ -30,8 +30,8 @@ pub struct Cli {
     num_results: usize,
 
     /// Minimum similarity score (0 = disabled).
-    #[arg(long = "min-score", visible_alias = "threshold", default_value = "0.0")]
-    min_score: f32,
+    #[arg(long = "threshold", visible_alias = "min-score", default_value = "0.0")]
+    threshold: f32,
 
     /// JSON output.
     #[arg(short = 'j', long = "json")]
@@ -41,9 +41,9 @@ pub struct Cli {
     #[arg(short = 'l', long = "files-only")]
     files_only: bool,
 
-    /// Compact output (no content).
-    #[arg(short = 'c', long = "compact")]
-    compact: bool,
+    /// JSON output without content field.
+    #[arg(long = "no-content")]
+    no_content: bool,
 
     /// Suppress progress.
     #[arg(short = 'q', long = "quiet")]
@@ -64,6 +64,14 @@ pub struct Cli {
     /// Skip auto-index (fail if missing).
     #[arg(long = "no-index")]
     no_index: bool,
+
+    /// Content preview lines (0 = none).
+    #[arg(short = 'C', long = "context", default_value = "5")]
+    context_lines: usize,
+
+    /// Filter results by regex (applied to content and name).
+    #[arg(short = 'e', long = "regex")]
+    regex: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -143,13 +151,19 @@ pub fn run() -> anyhow::Result<()> {
             query: cli.query.as_deref(),
             path: &cli.path,
             num_results: cli.num_results,
-            threshold: cli.min_score,
-            format: crate::types::OutputFormat::from_flags(cli.json, cli.files_only, cli.compact),
+            threshold: cli.threshold,
+            format: crate::types::OutputFormat::from_flags(
+                cli.json,
+                cli.files_only,
+                cli.no_content,
+            ),
             quiet: cli.quiet,
             file_types: cli.file_types.as_deref(),
             exclude: &cli.exclude,
             code_only: cli.code_only,
             no_index: cli.no_index,
+            context_lines: cli.context_lines,
+            regex: cli.regex.as_deref(),
         }),
     }
 }
