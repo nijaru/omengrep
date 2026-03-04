@@ -8,6 +8,7 @@
 | Manifest  | v10 (mtime field)              | 2026-02-23 |
 | Toolchain | nightly-2025-12-04             | 2026-02-14 |
 | Tests     | 14 integration (26 total)      | 2026-02-23 |
+| Boost     | Fixed (divide not multiply)    | 2026-03-03 |
 
 ## Architecture
 
@@ -21,10 +22,16 @@ MCP:    og mcp (JSON-RPC/stdio) -> og_search, og_similar, og_status tools
 
 None.
 
+## Boost Fix (2026-03-03)
+
+**Root bug**: `boost_results()` used `score *= boost` but omendb MaxSim scores are **negative** (less negative = more similar). Multiplying a negative score by a positive boost >1 makes it more negative = worse rank. Fix: `score /= boost` for negative scores.
+
+**Also added**: Content-match boost for NL queries. For queries without camelCase/snake_case (NL docstrings), count how many query terms appear in the block content. Functions whose body contains the query vocabulary get up to 2x additional boost. This is key for docstring→function retrieval.
+
+**Key finding**: `[Q]`/`[D]` ColBERT prefixes for LateOn-Code-edge are tokenized correctly (IDs 50368/50369) but hurt performance (2% vs 6% R@10). The model separation of query/doc spaces doesn't help for NL→code when scores are already near the negative boundary.
+
 ## Remaining Work
 
-- **Boost investigation** — Recall@1=Recall@5=0 consistently; correct results land at rank ~9. Boost likely hurting NL→code queries. Test with boost disabled to quantify.
-- **Full corpus bench** — run with 22091 corpus + 500 queries for production-quality signal (~100 min)
 - **MCP** — deferred, CLI sufficient for now
 
 ## Benchmarks
@@ -43,14 +50,15 @@ Quality bench: `bench/quality.py` (CodeSearchNet, 2000 corpus seed=42)
 | -------------------- | ------- | ------ | ---- | ---- | ---- | ---------- |
 | baseline             | 100     | 0.0082 | 0.00 | 0.00 | 0.08 | 2026-02-22 |
 | after a2a0a02 bundle | 100     | 0.0062 | 0.00 | 0.00 | 0.06 | 2026-02-24 |
-| current (confirmed)  | 100     | 0.0062 | 0.00 | 0.00 | 0.06 | 2026-03-03 |
-| current (500q)       | 500     | 0.0049 | 0.00 | 0.00 | 0.04 | 2026-03-03 |
+| boost fixed          | 100     | 0.0458 | 0.04 | 0.06 | 0.06 | 2026-03-03 |
 
-**Key finding (2026-03-03):** Recall@1=Recall@5=0 in ALL runs. Correct results always land
-at ranks 7-10 (avg ~9). This is a **ranking** failure, not retrieval — BM25+semantic finds
-the right code within top-10 but boost reranks it to the bottom. Likely cause: name-match
-boost (2.5x) favors blocks with identifier-matching terms over the semantically correct answer
-when queries are natural language docstrings.
+**Key finding (2026-03-03):** The boost was broken — `score *= boost` on negative MaxSim
+scores makes them more negative (worse rank). Fix: `score /= boost`. Added content-match
+boost for NL queries. MRR improved 7.4x; first non-zero R@1 and R@5.
+
+R@10 ceiling at 6% is a retrieval limit — the correct function is only in the omendb
+top-10 candidates for ~6% of queries. The model (LateOn-Code-edge) is code-to-code
+similarity optimized; NL→code retrieval quality is limited by the model.
 
 ## Competitive Context
 
