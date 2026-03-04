@@ -1,0 +1,19 @@
+{
+  "project": "tk",
+  "ref": "h8pv",
+  "title": "CLI improvements",
+  "description": "1. Rename --compact/-c to --no-content (currently outputs compact JSON, name implies compact text — confusing, ColGrep uses -c for opposite meaning). 2. Add --context/-C N flag to control content preview lines (hardcoded at 3, ColGrep shows 6). 3. Make --threshold primary name over --min-score. 4. Add -e/--regex pre-filter flag (ColGrep parity). All in src/cli/mod.rs + output.rs.",
+  "status": "open",
+  "priority": 3,
+  "labels": [],
+  "assignees": [],
+  "parent": null,
+  "blocked_by": [],
+  "estimate": null,
+  "due_date": null,
+  "logs": [],
+  "created_at": "2026-03-04T08:01:43.186Z",
+  "updated_at": "2026-03-04T08:01:43.186Z",
+  "completed_at": null,
+  "external": {}
+}

@@ -1,0 +1,19 @@
+{
+  "project": "tk",
+  "ref": "n2yk",
+  "title": "Bump doc_max_length beyond 512",
+  "description": "ModelConfig.doc_max_length is hardcoded at 512 in src/embedder/mod.rs. LateOn-Code-edge supports up to 2048 document tokens (from model onnx_config.json). omendb is NOT the blocker — it stores whatever vectors the embedder produces. Large functions silently lose their second half. Bump to 1024 or 2048 (check model's actual max_position_embeddings). Requires index rebuild.",
+  "status": "open",
+  "priority": 2,
+  "labels": [],
+  "assignees": [],
+  "parent": null,
+  "blocked_by": [],
+  "estimate": null,
+  "due_date": null,
+  "logs": [],
+  "created_at": "2026-03-04T08:01:42.972Z",
+  "updated_at": "2026-03-04T08:01:42.972Z",
+  "completed_at": null,
+  "external": {}
+}

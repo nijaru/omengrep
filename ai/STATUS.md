@@ -2,12 +2,12 @@
 
 | Metric    | Value                          | Updated    |
 | --------- | ------------------------------ | ---------- |
-| Package   | omengrep 0.0.1 (binary: og)    | 2026-02-24 |
+| Package   | omengrep 0.0.1 → 0.0.2 (wip)   | 2026-03-04 |
 | Models    | LateOn-Code-edge (48d, single) | 2026-02-16 |
 | omendb    | 0.0.30 (multi-vector+compact)  | 2026-02-23 |
 | Manifest  | v10 (mtime field)              | 2026-02-23 |
 | Toolchain | nightly-2025-12-04             | 2026-02-14 |
-| Tests     | 14 integration (26 total)      | 2026-02-23 |
+| Tests     | 17 integration, 12 unit        | 2026-03-04 |
 | Boost     | Fixed (divide not multiply)    | 2026-03-03 |
 
 ## Architecture
@@ -20,19 +20,68 @@ MCP:    og mcp (JSON-RPC/stdio) -> og_search, og_similar, og_status tools
 
 ## Active Work
 
-None.
+v0.0.2 release ready (all commits on main, no tag yet). See `docs/plans/2026-03-03-v0.0.2-release.md`.
 
-## Boost Fix (2026-03-03)
+## Bugs Fixed This Session (2026-03-03/04)
 
-**Root bug**: `boost_results()` used `score *= boost` but omendb MaxSim scores are **negative** (less negative = more similar). Multiplying a negative score by a positive boost >1 makes it more negative = worse rank. Fix: `score /= boost` for negative scores.
+| Bug                                                                    | Fix                                                          |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Scope filter leaked sibling dirs (`src/cli` matched `src/cli_utils`)   | Exact match + trailing slash guard                           |
+| Markdown chunk duplicate IDs (only last chunk survived in index)       | `chunk_idx` added to block ID                                |
+| Similar search showed `-40099% similar` for negative MaxSim scores     | Show raw score with `score:` label                           |
+| Double ONNX load on format-change rebuild                              | Replace `SemanticIndex::new().clear()` with `remove_dir_all` |
+| Dead `"different model"` branch in status/clean                        | Removed; manifest only emits "older version"                 |
+| Boost sign bug: `score *= boost` on negative scores (previous session) | `score /= boost` for negative scores                         |
 
-**Also added**: Content-match boost for NL queries. For queries without camelCase/snake_case (NL docstrings), count how many query terms appear in the block content. Functions whose body contains the query vocabulary get up to 2x additional boost. This is key for docstring→function retrieval.
+All bugs have regression tests. 29/29 tests pass.
 
-**Key finding**: `[Q]`/`[D]` ColBERT prefixes for LateOn-Code-edge are tokenized correctly (IDs 50368/50369) but hurt performance (2% vs 6% R@10). The model separation of query/doc spaces doesn't help for NL→code when scores are already near the negative boundary.
+## Key Findings
 
-## Remaining Work
+**doc_max_length = 512 is omengrep's own limit** (src/embedder/mod.rs:25 `ModelConfig`), NOT omendb.
+omendb stores whatever vectors the embedder produces — no internal token count constraint.
+LateOn-Code-edge supports up to 2048 document tokens (from model's onnx_config.json).
+Large functions silently lose their tail. Bumping doc_max_length is safe and high-impact.
 
-- **MCP** — deferred, CLI sufficient for now
+**Boost fix impact:** MRR 0.0062 → 0.0458 (7.4x), first non-zero R@1=0.04, R@5=0.06.
+R@10=6% ceiling is a retrieval limit (BM25 candidates), not a ranking limit.
+
+**ColBERT prefix investigation (previous session):** `[Q]`/`[D]` prefixes tokenize correctly
+(IDs 50368/50369) but hurt performance (R@10 2% vs 6%). Reverted. Do not retry.
+
+## CLI Assessment (2026-03-04)
+
+**Good:** Positional `og "query" ./path` is natural. Standard short flags. Subcommands clean.
+File refs (`file#func`, `file:line`) unique and powerful. Auto-update on search. Gitignore-aware.
+
+**Issues:**
+
+- `--compact`/`-c` outputs compact JSON (no content), but name implies compact text.
+  ColGrep uses `-c` for full content (opposite!). Rename to `--no-content`.
+- Content preview hardcoded at 3 lines / 80 chars. ColGrep shows 6. Needs `--context N` flag.
+- `--min-score` / `--threshold` naming: threshold is the alias, reads oddly in help.
+- No regex pre-filter flag (`-e pattern`) — ColGrep parity gap.
+
+## Competitive Position (2026-03-04)
+
+See `ai/research/competitive-analysis-2026-03.md` for full analysis.
+
+**Local tools:** ColGrep (Rust, PLAID, same model), grepai (Go, Ollama), osgrep (TS, daemon), smgrep (stalled).
+**mgrep:** cloud (files leave machine) — not a local tool despite local CLI.
+
+**Advantages:** File refs unique, true BM25 hybrid merge (ColGrep regex-only), index hierarchy, only tool with published recall@k.
+**Gaps:** No 130M model option (+7.5 MTEB points), no call graph tracing, no published perf numbers.
+
+## Roadmap
+
+| Task                             | Priority | Notes                                |
+| -------------------------------- | -------- | ------------------------------------ |
+| v0.0.2 release (tk-jw5v)         | p2       | Tag, publish, GH release             |
+| Bump doc_max_length (tk-n2yk)    | p2       | 512→1024/2048, easy win for quality  |
+| CLI improvements (tk-h8pv)       | p3       | --no-content, --context, --regex     |
+| Code synonym expansion (tk-bb7o) | p3       | BM25 recall, no model needed         |
+| Publish benchmarks (tk-i4b4)     | p3       | Indexing throughput + search latency |
+| 130M model support               | p3       | Needs doc_max_length bump first      |
+| Call graph tracing               | p4       | grepai parity                        |
 
 ## Benchmarks
 
@@ -46,44 +95,32 @@ Performance bench: `benches/omendb.rs` (divan)
 
 Quality bench: `bench/quality.py` (CodeSearchNet, 2000 corpus seed=42)
 
-| Run                  | Queries | MRR@10 | R@1  | R@5  | R@10 | Date       |
-| -------------------- | ------- | ------ | ---- | ---- | ---- | ---------- |
-| baseline             | 100     | 0.0082 | 0.00 | 0.00 | 0.08 | 2026-02-22 |
-| after a2a0a02 bundle | 100     | 0.0062 | 0.00 | 0.00 | 0.06 | 2026-02-24 |
-| boost fixed          | 100     | 0.0458 | 0.04 | 0.06 | 0.06 | 2026-03-03 |
+| Run                  | MRR@10 | R@1  | R@5  | R@10 | Date       |
+| -------------------- | ------ | ---- | ---- | ---- | ---------- |
+| baseline             | 0.0082 | 0.00 | 0.00 | 0.08 | 2026-02-22 |
+| after a2a0a02 bundle | 0.0062 | 0.00 | 0.00 | 0.06 | 2026-02-24 |
+| boost fixed          | 0.0458 | 0.04 | 0.06 | 0.06 | 2026-03-03 |
 
-**Key finding (2026-03-03):** The boost was broken — `score *= boost` on negative MaxSim
-scores makes them more negative (worse rank). Fix: `score /= boost`. Added content-match
-boost for NL queries. MRR improved 7.4x; first non-zero R@1 and R@5.
-
-R@10 ceiling at 6% is a retrieval limit — the correct function is only in the omendb
-top-10 candidates for ~6% of queries. The model (LateOn-Code-edge) is code-to-code
-similarity optimized; NL→code retrieval quality is limited by the model.
-
-## Competitive Context
-
-Primary competitor: **ColGrep** (LightOn, Feb 2026). Same model, same architecture.
-Uses NextPlaid (PLAID) vs omendb (MuVERA). ColGrep never published MRR/recall numbers.
-
-See `ai/research/benchmark-methodology.md` for full competitive analysis.
+R@10 ceiling at 6% is BM25 retrieval limit on NL→code task. Model optimized for code-to-code.
 
 ## omendb Notes (user is maintainer)
 
 1. **Custom tantivy tokenizer** — for camelCase/snake_case splitting in BM25
 2. **Native sparse vector support** — for future SPLADE integration
+3. **max_tokens in VectorStore** — exists in source but user confirms omendb does NOT constrain document token count; omengrep's ModelConfig is the only limit.
 
 ## Key Files
 
-| File                    | Purpose                             |
-| ----------------------- | ----------------------------------- |
-| `src/cli/search.rs`     | SearchParams, search + file refs    |
-| `src/cli/build.rs`      | Build/update index (shared helper)  |
-| `src/index/mod.rs`      | SemanticIndex (omendb multi-vector) |
-| `src/index/manifest.rs` | Manifest v10 (mtime field)          |
-| `src/index/walker.rs`   | scan + scan_metadata (stat-only)    |
-| `src/embedder/onnx.rs`  | ORT inference (query vs doc paths)  |
-| `src/tokenize.rs`       | BM25 identifier splitting           |
-| `src/boost.rs`          | Code-aware ranking boosts           |
-| `src/extractor/mod.rs`  | Extraction + nested block dedup     |
-| `benches/omendb.rs`     | Performance benchmark (divan)       |
-| `tests/cli.rs`          | Integration tests (assert_cmd)      |
+| File                    | Purpose                                        |
+| ----------------------- | ---------------------------------------------- |
+| `src/cli/mod.rs`        | CLI definition (clap), arg dispatch            |
+| `src/cli/search.rs`     | SearchParams, search + file refs               |
+| `src/cli/build.rs`      | Build/update index (shared helper)             |
+| `src/cli/output.rs`     | Result formatting (default/json/compact/files) |
+| `src/index/mod.rs`      | SemanticIndex (omendb multi-vector)            |
+| `src/index/manifest.rs` | Manifest v10 (mtime field)                     |
+| `src/embedder/mod.rs`   | ModelConfig (doc_max_length: 512)              |
+| `src/boost.rs`          | Code-aware ranking boosts                      |
+| `src/extractor/mod.rs`  | Extraction + nested block dedup                |
+| `src/tokenize.rs`       | BM25 identifier splitting                      |
+| `tests/cli.rs`          | Integration tests (assert_cmd)                 |

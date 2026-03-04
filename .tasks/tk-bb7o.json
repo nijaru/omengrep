@@ -1,0 +1,19 @@
+{
+  "project": "tk",
+  "ref": "bb7o",
+  "title": "Code synonym expansion for BM25",
+  "description": "R@10=6% ceiling is a BM25 retrieval problem — correct answer never makes candidates. Lightweight fix: hard-coded code vocab synonym table (~50-100 entries). auth→authenticate/login/session/token, error→exception/err/fail/panic, parse→tokenize/lex/decode/deserialize, etc. No model needed. Expand query terms before BM25 retrieval in src/index/mod.rs search(). Test with quality bench.",
+  "status": "open",
+  "priority": 3,
+  "labels": [],
+  "assignees": [],
+  "parent": null,
+  "blocked_by": [],
+  "estimate": null,
+  "due_date": null,
+  "logs": [],
+  "created_at": "2026-03-04T08:01:55.743Z",
+  "updated_at": "2026-03-04T08:01:55.743Z",
+  "completed_at": null,
+  "external": {}
+}

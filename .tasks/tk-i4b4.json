@@ -1,0 +1,19 @@
+{
+  "project": "tk",
+  "ref": "i4b4",
+  "title": "Publish benchmarks",
+  "description": "Nobody in the local semantic code search space has published indexing throughput or search latency p50/p99 on a standardized corpus. Differentiation opportunity. Protocol: Linux kernel at pinned commit (large) + omengrep src (small). Indexing: cold start, wall time, blocks/sec, files/sec. Search: 3 warmup + 10 timed runs, p50/p99. Publish raw data. See ai/research/benchmark-methodology.md.",
+  "status": "open",
+  "priority": 3,
+  "labels": [],
+  "assignees": [],
+  "parent": null,
+  "blocked_by": [],
+  "estimate": null,
+  "due_date": null,
+  "logs": [],
+  "created_at": "2026-03-04T08:01:55.945Z",
+  "updated_at": "2026-03-04T08:01:55.945Z",
+  "completed_at": null,
+  "external": {}
+}
