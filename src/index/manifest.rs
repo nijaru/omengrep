@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::embedder;
 
-pub const MANIFEST_VERSION: u32 = 10;
+pub const MANIFEST_VERSION: u32 = 11;
 const MANIFEST_FILE: &str = "manifest.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

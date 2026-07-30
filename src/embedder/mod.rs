@@ -30,7 +30,7 @@ pub const MODEL: &ModelConfig = &ModelConfig {
     token_dim: 48,
     doc_max_length: 1024,
     query_max_length: 256,
-    version: "lateon-code-edge-v1",
+    version: "lateon-code-edge-v2-prefixes",
     batch_size: 16,
 };
 

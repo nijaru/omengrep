@@ -3,6 +3,9 @@ use tokenizers::Tokenizer;
 
 use super::ModelConfig;
 
+const QUERY_PREFIX: &str = "[Q] ";
+const DOCUMENT_PREFIX: &str = "[D] ";
+
 /// Wrapper around HuggingFace tokenizer.
 /// Pre-configured with truncation/padding to avoid cloning per batch.
 pub struct TokenizerWrapper {
@@ -48,8 +51,9 @@ impl TokenizerWrapper {
         texts
             .iter()
             .map(|text| {
+                let prepared = format!("{DOCUMENT_PREFIX}{text}");
                 self.doc_tokenizer
-                    .encode(tokenizers::EncodeInput::Single((*text).into()), true)
+                    .encode(tokenizers::EncodeInput::Single(prepared.into()), true)
                     .map_err(|e| anyhow::anyhow!("{e}"))
             })
             .collect()
@@ -57,8 +61,21 @@ impl TokenizerWrapper {
 
     /// Encode a query (shorter max length).
     pub fn encode_query(&self, text: &str) -> Result<tokenizers::Encoding> {
+        let prepared = format!("{QUERY_PREFIX}{text}");
         self.query_tokenizer
-            .encode(text, true)
+            .encode(prepared, true)
             .map_err(|e| anyhow::anyhow!("{e}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DOCUMENT_PREFIX, QUERY_PREFIX};
+
+    #[test]
+    fn model_prefixes_are_distinct_and_include_spacing() {
+        assert_eq!(QUERY_PREFIX, "[Q] ");
+        assert_eq!(DOCUMENT_PREFIX, "[D] ");
+        assert_ne!(QUERY_PREFIX, DOCUMENT_PREFIX);
     }
 }
