@@ -264,6 +264,9 @@ jobs:
           formula.write_text(content)
           PY
 
+      - name: Validate formula syntax
+        run: ruby -c Formula/og.rb
+
       - name: Commit and push
         env:
           TAG: ${{ needs.verify.outputs.tag }}
