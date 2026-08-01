@@ -226,30 +226,43 @@ jobs:
       - name: Update formula
         env:
           TAG: ${{ needs.verify.outputs.tag }}
-          VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          MAC_ARM64_SHA=$(cat og-aarch64-apple-darwin.tar.gz.sha256 | awk '{print $1}')
-          SOURCE_SHA=$(curl -sL "https://github.com/nijaru/omengrep/archive/refs/tags/$TAG.tar.gz" | sha256sum | awk '{print $1}')
+          export MAC_ARM64_SHA
+          MAC_ARM64_SHA=$(awk '{print $1}' og-aarch64-apple-darwin.tar.gz.sha256)
 
-          sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/og.rb
-          sed -i "s|/v[0-9.]*[^/]*/og-|/$TAG/og-|g" Formula/og.rb
-          sed -i "s|/v[0-9.]*[^/]*.tar.gz|/$TAG.tar.gz|g" Formula/og.rb
-
-          python3 -c "
+          python3 <<'PY'
+          import os
           import re
-          with open('Formula/og.rb') as f:
-              content = f.read()
-          shas = ['$MAC_ARM64_SHA', '$SOURCE_SHA']
-          # Match any existing sha256 value (including PLACEHOLDER)
-          pattern = r'sha256 \"[^\"]*\"'
-          matches = list(re.finditer(pattern, content))
-          for i, m in enumerate(matches):
-              if i < len(shas):
-                  content = content[:m.start()] + f'sha256 \"{shas[i]}\"' + content[m.end():]
-                  matches = list(re.finditer(pattern, content))
-          with open('Formula/og.rb', 'w') as f:
-              f.write(content)
-          "
+          from pathlib import Path
+
+          formula = Path("Formula/og.rb")
+          content = formula.read_text()
+          tag = os.environ["TAG"]
+          mac_arm64_sha = os.environ["MAC_ARM64_SHA"]
+
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+              raise SystemExit(f"invalid tag: {tag}")
+          if not re.fullmatch(r"[0-9a-f]{64}", mac_arm64_sha):
+              raise SystemExit(f"invalid macOS ARM64 SHA-256: {mac_arm64_sha}")
+
+          def replace(pattern, replacement):
+              global content
+              content, count = re.subn(pattern, replacement, content)
+              if count != 1:
+                  raise SystemExit(f"expected one match for {pattern!r}, found {count}")
+
+          replace(
+              r'https://github\.com/nijaru/omengrep/releases/download/v[^/]+/'
+              r'og-aarch64-apple-darwin\.tar\.gz',
+              f'https://github.com/nijaru/omengrep/releases/download/{tag}/'
+              'og-aarch64-apple-darwin.tar.gz',
+          )
+          replace(
+              r'(url "[^"]*og-aarch64-apple-darwin\.tar\.gz"\n\s+sha256 )"[^"]+"',
+              lambda match: f'{match.group(1)}"{mac_arm64_sha}"',
+          )
+          formula.write_text(content)
+          PY
 
       - name: Commit and push
         env:
