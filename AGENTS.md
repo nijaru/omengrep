@@ -118,9 +118,10 @@ Cargo.toml
 
 ## AI Context
 
-**Read order:** `ai/STATUS.md` -> `ai/DECISIONS.md`
+**Read order:** `ai/brief.md` -> `ai/decisions.md` -> `ai/architecture.md`
 
 | File              | Purpose                          |
 | ----------------- | -------------------------------- |
-| `ai/STATUS.md`    | Current state, blockers, roadmap |
-| `ai/DECISIONS.md` | Architectural decisions          |
+| `ai/brief.md`     | Active task, direction, next step |
+| `ai/decisions.md` | Architectural decisions          |
+| `ai/architecture.md` | System design and components  |
