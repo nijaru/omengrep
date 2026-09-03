@@ -1,0 +1,67 @@
+{
+  "_note": "Agent-task qrels over bench/fixtures/qrels-corpus (frozen omengrep source). Judged from code knowledge, not engine output. Identity: (file, name).",
+  "queries": [
+    {"q": "top_k", "kind": "ident", "relevant": [
+      ["crates/og-core/src/vectors.rs", "top_k"]]},
+    {"q": "rank_context", "kind": "ident", "relevant": [
+      ["crates/og-core/src/context/rank.rs", "rank_context"]]},
+    {"q": "parse_file_reference", "kind": "ident", "relevant": [
+      ["crates/og-core/src/search.rs", "parse_file_reference"]]},
+    {"q": "rrf_fuse", "kind": "ident", "relevant": [
+      ["crates/og-core/src/retrieve.rs", "rrf_fuse"]]},
+    {"q": "download_default_model", "kind": "ident", "relevant": [
+      ["crates/og-core/src/model/potion.rs", "download_default_model"]]},
+    {"q": "find_index_root", "kind": "ident", "relevant": [
+      ["crates/og-core/src/index.rs", "find_index_root"]]},
+    {"q": "update_if_stale", "kind": "ident", "relevant": [
+      ["crates/og-core/src/index.rs", "update_if_stale"]]},
+    {"q": "write_at", "kind": "ident", "relevant": [
+      ["crates/og-core/src/vectors.rs", "write_at"]]},
+    {"q": "outline_json", "kind": "ident", "relevant": [
+      ["crates/og-core/src/context/outline.rs", "outline_json"]]},
+    {"q": "definition_weight", "kind": "ident", "relevant": [
+      ["crates/og-core/src/context/rank.rs", "definition_weight"]]},
+    {"q": "insert_file", "kind": "ident", "relevant": [
+      ["crates/og-core/src/catalog.rs", "insert_file"]]},
+    {"q": "embedder_for", "kind": "ident", "relevant": [
+      ["crates/og-core/src/model/mod.rs", "embedder_for"]]},
+    {"q": "how to add a new CLI subcommand", "kind": "nl", "relevant": [
+      ["crates/og/src/cli/mod.rs", "Command"],
+      ["crates/og/src/cli/mod.rs", "run"]]},
+    {"q": "token budget packing for context output", "kind": "nl", "relevant": [
+      ["crates/og-core/src/context/mod.rs", "pack_context"],
+      ["crates/og-core/src/context/mod.rs", "TokenBudget"]]},
+    {"q": "publish a generation atomically", "kind": "nl", "relevant": [
+      ["crates/og-core/src/index.rs", "build_with"],
+      ["crates/og-core/src/index.rs", "current_generation"]]},
+    {"q": "schema change forces a full rebuild", "kind": "nl", "relevant": [
+      ["crates/og-core/src/index.rs", "build_with"],
+      ["crates/og-core/src/catalog.rs", "init_schema"]]},
+    {"q": "fp16 vector storage for the sidecar", "kind": "nl", "relevant": [
+      ["crates/og-core/src/vectors.rs", "VectorWriter"],
+      ["crates/og-core/src/vectors.rs", "top_k"],
+      ["crates/og-core/src/vectors.rs", "write_row_bytes"]]},
+    {"q": "resolve the model from cache without network", "kind": "nl", "relevant": [
+      ["crates/og-core/src/model/potion.rs", "download_default_model"],
+      ["crates/og-core/src/model/potion.rs", "load_default"]]},
+    {"q": "filter noisy symbol names from ranking", "kind": "nl", "relevant": [
+      ["crates/og-core/src/context/rank.rs", "is_noisy_name"],
+      ["crates/og-core/src/context/rank.rs", "symbol_key"]]},
+    {"q": "find similar code from a file and line number", "kind": "nl", "relevant": [
+      ["crates/og-core/src/retrieve.rs", "resolve_reference"],
+      ["crates/og-core/src/retrieve.rs", "similar"],
+      ["crates/og-core/src/search.rs", "run_similar"]]},
+    {"q": "skeleton snippets in file outlines", "kind": "nl", "relevant": [
+      ["crates/og-core/src/context/outline.rs", "build_outline"],
+      ["crates/og-core/src/extract/mod.rs", "extract_skeleton"]]},
+    {"q": "split identifiers for BM25 search terms", "kind": "nl", "relevant": [
+      ["crates/og-core/src/tokenize.rs", "split_identifiers"],
+      ["crates/og-core/src/tokenize.rs", "split_word"]]},
+    {"q": "rank files and symbols for compact context", "kind": "nl", "relevant": [
+      ["crates/og-core/src/context/rank.rs", "rank_context"],
+      ["crates/og-core/src/context/mod.rs", "run_context"]]},
+    {"q": "update a stale index before searching", "kind": "nl", "relevant": [
+      ["crates/og-core/src/index.rs", "update_if_stale"],
+      ["crates/og-core/src/index.rs", "needs_update"]]}
+  ]
+}
