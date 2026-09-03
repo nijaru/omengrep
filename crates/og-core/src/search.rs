@@ -67,6 +67,7 @@ pub fn run_similar(
     line: Option<usize>,
     name: Option<&str>,
     k: usize,
+    quiet: bool,
 ) -> Result<Vec<SearchResult>> {
     let file_dir = Path::new(ref_path)
         .parent()
@@ -75,6 +76,13 @@ pub fn run_similar(
     let (index_root, found) = index::find_index_root(&file_dir);
     if !found {
         anyhow::bail!("No index found. Run 'og build' first.");
+    }
+
+    // Same freshness contract as run_search: a stale index is updated
+    // before answering, so file refs (file#name, file:line) can never
+    // silently miss blocks added since the last build.
+    if let Ok(true) = index::update_if_stale(&index_root, quiet) {
+        eprintln!("Index updated");
     }
 
     let idx = Index::open(&index_root)?;

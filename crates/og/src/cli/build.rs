@@ -31,11 +31,10 @@ pub fn run(path: &Path, deterministic: bool, force: bool, quiet: bool) -> Result
         );
     }
     let stats = index::build_with(path, embedder.as_ref(), quiet, mode)?;
-    if !quiet {
-        eprintln!("Indexed {} blocks from {} files", stats.blocks, stats.files);
-        if stats.errors > 0 {
-            eprintln!("  {} files failed", stats.errors);
-        }
+    // index::build_with already printed the "Indexed N blocks ... (Xs)"
+    // summary; only surface per-run extras here (never duplicate the line).
+    if !quiet && stats.errors > 0 {
+        eprintln!("  {} files failed", stats.errors);
     }
     Ok(())
 }

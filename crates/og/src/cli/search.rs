@@ -110,7 +110,7 @@ fn run_similar(file_ref: FileRef, params: &SearchParams<'_>) -> Result<()> {
     };
 
     let t0 = Instant::now();
-    let results = search::run_similar(path, line, name, params.num_results)?;
+    let results = search::run_similar(path, line, name, params.num_results, params.quiet)?;
     let search_time = t0.elapsed();
 
     if results.is_empty() {
