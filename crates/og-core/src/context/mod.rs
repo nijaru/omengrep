@@ -89,9 +89,7 @@ pub fn open_scoped(path: &Path, quiet: bool) -> Result<ScopedIndex> {
         }
     }
 
-    if found
-        && let Ok(true) = index::update_if_stale(&index_root, quiet)
-    {
+    if found && let Ok(true) = index::update_if_stale(&index_root, quiet) {
         eprintln!("Index updated");
     }
 
@@ -249,9 +247,7 @@ fn pack_context(
         }
         let mut kept: Vec<rank::RankedSymbol> = Vec::with_capacity(file.symbols.len());
         for symbol in file.symbols.drain(..) {
-            let mut cost = estimate_tokens(&symbol.name)
-                + estimate_tokens(&symbol.block_type)
-                + 2;
+            let mut cost = estimate_tokens(&symbol.name) + estimate_tokens(&symbol.block_type) + 2;
             if include_skeleton {
                 cost += symbol.skeleton.as_deref().map(estimate_tokens).unwrap_or(0);
             }

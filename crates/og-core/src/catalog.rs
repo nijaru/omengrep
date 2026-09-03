@@ -13,8 +13,8 @@ use crate::types::Block;
 pub const SCHEMA_VERSION: i64 = 2;
 
 pub fn open(path: &Path) -> Result<Connection> {
-    let conn = Connection::open(path)
-        .with_context(|| format!("opening catalog {}", path.display()))?;
+    let conn =
+        Connection::open(path).with_context(|| format!("opening catalog {}", path.display()))?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "OFF")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -23,8 +23,8 @@ pub fn open(path: &Path) -> Result<Connection> {
 
 /// Open a published generation's catalog read-only (immutable assumption).
 pub fn open_readonly(path: &Path) -> Result<Connection> {
-    let conn = Connection::open(path)
-        .with_context(|| format!("opening catalog {}", path.display()))?;
+    let conn =
+        Connection::open(path).with_context(|| format!("opening catalog {}", path.display()))?;
     conn.pragma_update(None, "query_only", "ON")?;
     Ok(conn)
 }
@@ -102,10 +102,18 @@ pub fn get_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
 }
 
 /// Path -> (size, mtime) for every indexed file (incremental diff input).
-pub fn file_fingerprints(conn: &Connection) -> Result<std::collections::HashMap<String, (i64, i64)>> {
+pub fn file_fingerprints(
+    conn: &Connection,
+) -> Result<std::collections::HashMap<String, (i64, i64)>> {
     let mut stmt = conn.prepare("SELECT path, size, mtime FROM files")?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?)))?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?
         .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok(rows.into_iter().map(|(p, s, m)| (p, (s, m))).collect())
 }

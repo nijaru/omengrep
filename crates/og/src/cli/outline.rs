@@ -16,13 +16,15 @@ pub struct OutlineParams<'a> {
 }
 
 pub fn run(params: &OutlineParams<'_>) -> Result<()> {
-    let files = context::run_outline(params.path, params.skeleton, params.max_tokens, params.quiet)?;
+    let files = context::run_outline(
+        params.path,
+        params.skeleton,
+        params.max_tokens,
+        params.quiet,
+    )?;
 
     if files.is_empty() {
-        eprintln!(
-            "No indexed files under {}",
-            params.path.display()
-        );
+        eprintln!("No indexed files under {}", params.path.display());
         std::process::exit(EXIT_ERROR);
     }
 

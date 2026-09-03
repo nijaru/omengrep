@@ -60,9 +60,9 @@ fn outline_skeleton_golden() {
     let dir = fixture();
     let files = context::run_outline(
         &dir.path().join("src/alpha.rs"),
-        true,   // skeleton
-        8000,   // max tokens (default; not binding on this fixture)
-        false,  // quiet
+        true,  // skeleton
+        8000,  // max tokens (default; not binding on this fixture)
+        false, // quiet
     )
     .unwrap();
     let json = serde_json::to_string_pretty(&context::outline_json(&files)).unwrap();
@@ -111,7 +111,11 @@ fn outline_scopes_to_subdir() {
     let names: Vec<&str> = files.iter().map(|f| f.file.as_str()).collect();
     assert_eq!(names, vec!["src/alpha.rs", "src/beta.rs"]);
     // No skeletons requested: entries carry None.
-    assert!(files.iter().all(|f| f.blocks.iter().all(|b| b.skeleton.is_none())));
+    assert!(
+        files
+            .iter()
+            .all(|f| f.blocks.iter().all(|b| b.skeleton.is_none()))
+    );
 }
 
 #[test]
@@ -206,7 +210,8 @@ fn outline_empty_scope_returns_no_files() {
     let dir = fixture();
     let files = context::run_outline(&dir.path().join("src/empty"), false, 8000, false).unwrap();
     assert!(files.is_empty());
-    let ranked = context::run_context(&dir.path().join("src/empty"), 12, 5, false, 8000, false).unwrap();
+    let ranked =
+        context::run_context(&dir.path().join("src/empty"), 12, 5, false, 8000, false).unwrap();
     assert!(ranked.is_empty());
 }
 

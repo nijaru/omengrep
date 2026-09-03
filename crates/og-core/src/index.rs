@@ -18,7 +18,7 @@ use anyhow::{Context, Result};
 use rayon::prelude::*;
 
 use crate::catalog;
-use crate::manifest::{Manifest, MANIFEST_VERSION};
+use crate::manifest::{MANIFEST_VERSION, Manifest};
 use crate::model::Embedder;
 use crate::scan;
 use crate::types::{Block, IndexStats};
@@ -53,7 +53,6 @@ impl Index {
             vectors,
         })
     }
-
 }
 
 /// Find the nearest enclosing index root: walk up from `start` looking for
@@ -305,7 +304,8 @@ fn incremental_build(
     let mut changed: Vec<(PathBuf, String, u64)> = Vec::new();
     let mut deleted: Vec<String> = Vec::new();
 
-    let mut scan_fp: std::collections::HashMap<String, (i64, i64)> = std::collections::HashMap::new();
+    let mut scan_fp: std::collections::HashMap<String, (i64, i64)> =
+        std::collections::HashMap::new();
     for (path, (content, mtime)) in &files {
         let rel = rel_path(root, path)?;
         scan_fp.insert(rel.clone(), (content.len() as i64, *mtime as i64));
@@ -333,7 +333,8 @@ fn incremental_build(
     }
 
     // Deletions: remove catalog rows + zero vector rows.
-    let mut vec_writer = VectorWriter::open_existing(&staging.join("vectors-000.bin"), embedder.dims())?;
+    let mut vec_writer =
+        VectorWriter::open_existing(&staging.join("vectors-000.bin"), embedder.dims())?;
     let mut deleted_rowids: Vec<i64> = Vec::new();
     for rel in &deleted {
         deleted_rowids.extend(catalog::delete_file(&conn, rel)?);
@@ -446,9 +447,7 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
 
 fn compute_content_hash(conn: &rusqlite::Connection) -> Result<String> {
     let mut hasher = blake3::Hasher::new();
-    let mut stmt = conn.prepare(
-        "SELECT path, size, mtime, hash FROM files ORDER BY path",
-    )?;
+    let mut stmt = conn.prepare("SELECT path, size, mtime, hash FROM files ORDER BY path")?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {
         let f: String = row.get(0)?;

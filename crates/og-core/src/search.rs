@@ -26,15 +26,15 @@ pub fn run_search(
             let embedder = crate::model::default_embedder()?;
             index::build_with(&start, embedder.as_ref(), false, index::Incremental::Auto)?;
         } else {
-            anyhow::bail!("No index found. Run 'og build' first.\nTip: OG_AUTO_BUILD=1 enables auto-indexing.");
+            anyhow::bail!(
+                "No index found. Run 'og build' first.\nTip: OG_AUTO_BUILD=1 enables auto-indexing."
+            );
         }
     }
 
     // Auto-update stale files before searching (v0.0.3 behavior). Errors
     // are non-fatal: a stale index still answers via BM25.
-    if found
-        && let Ok(true) = index::update_if_stale(&index_root, quiet)
-    {
+    if found && let Ok(true) = index::update_if_stale(&index_root, quiet) {
         eprintln!("Index updated");
     }
 
@@ -62,7 +62,12 @@ pub(crate) fn auto_build_enabled() -> bool {
 }
 
 /// Similar-code search from a file reference (file#name, file:line, file).
-pub fn run_similar(ref_path: &str, line: Option<usize>, name: Option<&str>, k: usize) -> Result<Vec<SearchResult>> {
+pub fn run_similar(
+    ref_path: &str,
+    line: Option<usize>,
+    name: Option<&str>,
+    k: usize,
+) -> Result<Vec<SearchResult>> {
     let file_dir = Path::new(ref_path)
         .parent()
         .unwrap_or(Path::new("."))
@@ -74,7 +79,9 @@ pub fn run_similar(ref_path: &str, line: Option<usize>, name: Option<&str>, k: u
 
     let idx = Index::open(&index_root)?;
     // Resolve the reference path relative to the index root.
-    let abs = Path::new(ref_path).canonicalize().unwrap_or_else(|_| ref_path.into());
+    let abs = Path::new(ref_path)
+        .canonicalize()
+        .unwrap_or_else(|_| ref_path.into());
     let rel = abs
         .strip_prefix(&index_root)
         .unwrap_or(&abs)

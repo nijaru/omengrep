@@ -15,7 +15,11 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "og", about = "Semantic code search — hybrid BM25 + vectors", version)]
+#[command(
+    name = "og",
+    about = "Semantic code search — hybrid BM25 + vectors",
+    version
+)]
 pub struct Cli {
     #[command(subcommand)]
     command: Option<Command>,

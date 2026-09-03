@@ -37,7 +37,10 @@ fn incremental_updates_keep_vector_rows_aligned() {
 
     // Modify the file holding the max rowid: delete frees its rowid, and
     // SQLite re-assigns the same freed rowid (not max+1) on re-insert.
-    write(&src.join("b.rs"), "fn beta_v2() { println!(\"changed\"); }\n");
+    write(
+        &src.join("b.rs"),
+        "fn beta_v2() { println!(\"changed\"); }\n",
+    );
     build(root);
 
     let idx = Index::open(root).unwrap();
@@ -124,7 +127,10 @@ fn generation_names_mix_model_identity() {
     // Rebuild same content + same model: republishes the same name.
     index::build_with(root, &det, true, Incremental::Auto).unwrap();
     let gen2 = index_dir_generation(root);
-    assert_eq!(gen1, gen2, "same content+model must republish same generation");
+    assert_eq!(
+        gen1, gen2,
+        "same content+model must republish same generation"
+    );
 
     // A deterministic-vs-potion identity difference can't be exercised
     // without the model download; the guard is exercised via the manifest
@@ -145,7 +151,10 @@ fn staging_leftovers_are_cleaned_on_next_build() {
     write(&staging.join("garbage.txt"), "interrupted");
 
     build(root);
-    assert!(!staging.exists(), "staging must be cleared by the next build");
+    assert!(
+        !staging.exists(),
+        "staging must be cleared by the next build"
+    );
     assert!(Index::open(root).is_ok(), "index remains readable");
 }
 

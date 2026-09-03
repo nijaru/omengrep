@@ -30,8 +30,8 @@ pub struct VectorStore {
 impl VectorStore {
     /// Open `vectors-000.bin` with `dims` dimensions, fp16 rows.
     pub fn open(path: &Path, dims: usize) -> Result<Self> {
-        let file = File::open(path)
-            .with_context(|| format!("opening vector store {}", path.display()))?;
+        let file =
+            File::open(path).with_context(|| format!("opening vector store {}", path.display()))?;
         let mmap = unsafe { Mmap::map(&file) }
             .with_context(|| format!("mmapping vector store {}", path.display()))?;
         let row_bytes = dims * FP16_BYTES;
@@ -84,14 +84,15 @@ impl VectorStore {
             })
             .collect();
 
-        let mut ranked: Vec<(usize, f32)> =
-            scores.into_iter().enumerate().filter(|(_, s)| *s >= SIMILARITY_FLOOR).collect();
+        let mut ranked: Vec<(usize, f32)> = scores
+            .into_iter()
+            .enumerate()
+            .filter(|(_, s)| *s >= SIMILARITY_FLOOR)
+            .collect();
         if ranked.is_empty() {
             return Vec::new();
         }
-        ranked.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         ranked
             .into_iter()
             .take(k)
@@ -246,7 +247,11 @@ mod tests {
         // ranking noise floor (floor is 0.30; deviation budget 1e-3).
         let (_dir, path) = tempdir();
         let dims = 256;
-        let a = normalize(&(0..dims).map(|i| (i as f32 * 0.7).sin() + 2.0).collect::<Vec<_>>());
+        let a = normalize(
+            &(0..dims)
+                .map(|i| (i as f32 * 0.7).sin() + 2.0)
+                .collect::<Vec<_>>(),
+        );
         // b close to a: high cosine, exercises lane precision, not filtering
         let b = normalize(
             &a.iter()
@@ -272,7 +277,11 @@ mod tests {
     }
 
     fn normalize(v: &[f32]) -> Vec<f32> {
-        let norm = v.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
+        let norm = v
+            .iter()
+            .map(|x| (*x as f64) * (*x as f64))
+            .sum::<f64>()
+            .sqrt();
         v.iter().map(|x| (*x as f64 / norm) as f32).collect()
     }
 }

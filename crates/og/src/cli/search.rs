@@ -5,9 +5,9 @@ use std::time::Instant;
 
 use anyhow::{Result, bail};
 
+use og_core::output;
 use og_core::search;
 use og_core::types::{EXIT_ERROR, EXIT_MATCH, EXIT_NO_MATCH, FileRef, OutputFormat};
-use og_core::output;
 
 pub struct SearchParams<'a> {
     pub query: Option<&'a str>,
@@ -36,8 +36,13 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
     }
 
     let t0 = Instant::now();
-    let mut results =
-        search::run_search(query, params.path, params.num_results, !params.no_semantic, params.quiet)?;
+    let mut results = search::run_search(
+        query,
+        params.path,
+        params.num_results,
+        !params.no_semantic,
+        params.quiet,
+    )?;
     let search_time = t0.elapsed();
 
     if results.is_empty() {
@@ -77,7 +82,11 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
     );
 
     if !params.quiet && !matches!(params.format, OutputFormat::Json | OutputFormat::FilesOnly) {
-        let result_word = if results.len() == 1 { "result" } else { "results" };
+        let result_word = if results.len() == 1 {
+            "result"
+        } else {
+            "results"
+        };
         eprintln!(
             "{} {} ({:.2}s)",
             results.len(),
@@ -125,7 +134,11 @@ fn run_similar(file_ref: FileRef, params: &SearchParams<'_>) -> Result<()> {
     );
 
     if !params.quiet && !matches!(params.format, OutputFormat::Json | OutputFormat::FilesOnly) {
-        let result_word = if results.len() == 1 { "result" } else { "results" };
+        let result_word = if results.len() == 1 {
+            "result"
+        } else {
+            "results"
+        };
         eprintln!(
             "{} similar {} ({:.2}s)",
             results.len(),

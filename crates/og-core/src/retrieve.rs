@@ -71,11 +71,8 @@ pub fn search(
         Vec::new()
     };
 
-    let channels: Vec<(f32, Channel)> = vec![
-        (1.0, bm25_hits),
-        (0.7, trigram_hits),
-        (1.0, vector_hits),
-    ];
+    let channels: Vec<(f32, Channel)> =
+        vec![(1.0, bm25_hits), (0.7, trigram_hits), (1.0, vector_hits)];
     let fused = rrf_fuse(&channels, k);
 
     let mut results = hydrate(&index.conn, fused)?;
@@ -129,7 +126,11 @@ fn bm25_search(conn: &rusqlite::Connection, terms: &str, k: usize) -> Result<Cha
     if split.is_empty() {
         return Ok(Vec::new());
     }
-    let match_expr = split.iter().map(|t| fts_quote(t)).collect::<Vec<_>>().join(" OR ");
+    let match_expr = split
+        .iter()
+        .map(|t| fts_quote(t))
+        .collect::<Vec<_>>()
+        .join(" OR ");
 
     let sql = format!(
         "SELECT block_id, bm25(block_fts) AS score

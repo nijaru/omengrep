@@ -58,7 +58,10 @@ impl PotionEmbedder {
         let tensor = st
             .tensor("embeddings")
             .map_err(|e| anyhow!("no 'embeddings' tensor: {e}"))?;
-        anyhow::ensure!(tensor.dtype() == safetensors::Dtype::F16, "expected F16 embeddings");
+        anyhow::ensure!(
+            tensor.dtype() == safetensors::Dtype::F16,
+            "expected F16 embeddings"
+        );
         let shape = tensor.shape();
         anyhow::ensure!(shape.len() == 2, "expected 2-D embeddings, got {shape:?}");
         let (vocab_size, dims) = (shape[0], shape[1]);
@@ -81,10 +84,7 @@ impl PotionEmbedder {
                  wrong tokenizer for these weights"
             );
         }
-        let unk_token_id = tokenizer
-            .get_vocab(true)
-            .get("[UNK]")
-            .copied();
+        let unk_token_id = tokenizer.get_vocab(true).get("[UNK]").copied();
         let tokens = tokenizer.get_vocab(true);
         let lengths: Vec<usize> = tokens.keys().map(|t: &String| t.len()).collect();
         let median_token_length = median(&mut lengths.clone()).clamp(1, 8);
@@ -237,9 +237,9 @@ fn download_default_model() -> Result<PathBuf> {
 
     let mut files = Vec::new();
     for name in names {
-        let path = repo
-            .download(name)
-            .with_context(|| format!("downloading {name} from {DEFAULT_REPO} (run 'og model install' with network)"))?;
+        let path = repo.download(name).with_context(|| {
+            format!("downloading {name} from {DEFAULT_REPO} (run 'og model install' with network)")
+        })?;
         files.push(path);
     }
     // All files live in the same snapshot dir.

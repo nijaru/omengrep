@@ -54,10 +54,7 @@ fn potion_matches_reference() {
         // Both unit-normalized: dot == cosine. Require > 0.9999.
         let cosine = dot;
         worst = worst.max((1.0 - cosine).abs());
-        assert!(
-            cosine > 0.9999,
-            "text {i}: cosine {cosine}"
-        );
+        assert!(cosine > 0.9999, "text {i}: cosine {cosine}");
     }
     eprintln!("parity ok; worst deviation from cosine-1.0: {worst:.6}");
 }
@@ -77,8 +74,12 @@ fn parse_npy_header_len(raw: &[u8]) -> Option<usize> {
     let offset = 8;
     let len = match len_bytes {
         2 => u16::from_le_bytes([raw[offset], raw[offset + 1]]) as usize,
-        _ => u32::from_le_bytes([raw[offset], raw[offset + 1], raw[offset + 2], raw[offset + 3]])
-            as usize,
+        _ => u32::from_le_bytes([
+            raw[offset],
+            raw[offset + 1],
+            raw[offset + 2],
+            raw[offset + 3],
+        ]) as usize,
     };
     Some(8 + len_bytes + len)
 }

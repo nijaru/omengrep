@@ -118,7 +118,11 @@ fn embed_deterministic(text: &str, dims: usize) -> Vec<f32> {
     }
 
     // L2 normalize so dot product == cosine similarity.
-    let norm = out.iter().map(|v| (*v as f64) * (*v as f64)).sum::<f64>().sqrt();
+    let norm = out
+        .iter()
+        .map(|v| (*v as f64) * (*v as f64))
+        .sum::<f64>()
+        .sqrt();
     if norm > 0.0 {
         for v in &mut out {
             *v = (*v as f64 / norm) as f32;

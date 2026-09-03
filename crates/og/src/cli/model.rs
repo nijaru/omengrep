@@ -8,7 +8,12 @@ use og_core::model::potion;
 pub fn status() -> Result<()> {
     match potion::PotionEmbedder::load_default() {
         Ok(p) => {
-            println!("default: {} (dims {}, vocab {})", p.id(), p.dims(), p.vocab_size());
+            println!(
+                "default: {} (dims {}, vocab {})",
+                p.id(),
+                p.dims(),
+                p.vocab_size()
+            );
             println!("status:  installed");
         }
         Err(e) => {
@@ -22,6 +27,11 @@ pub fn status() -> Result<()> {
 
 pub fn install() -> Result<()> {
     let p = potion::PotionEmbedder::load_default()?;
-    println!("installed: {} (dims {}, vocab {})", p.id(), p.dims(), p.vocab_size());
+    println!(
+        "installed: {} (dims {}, vocab {})",
+        p.id(),
+        p.dims(),
+        p.vocab_size()
+    );
     Ok(())
 }
