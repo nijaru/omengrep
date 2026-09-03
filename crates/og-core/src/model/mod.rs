@@ -1,6 +1,8 @@
 //! Embedder boundary. All model identity flows through the manifest:
 //! a catalog built with a different model id is rejected (force rebuild).
 
+pub mod potion;
+
 use anyhow::Result;
 
 /// A text embedding model.
@@ -18,6 +20,32 @@ pub trait Embedder: Send + Sync {
 
     /// Embed a batch of texts. Output len must equal input len.
     fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>>;
+}
+
+/// Construct the embedder named by a manifest model_id. Identity pins the
+/// weights: a cached model whose hash differs from the manifest errors
+/// (rebuild required), never silently re-embeds into the old space.
+pub fn embedder_for(model_id: &str) -> Result<Box<dyn Embedder>> {
+    if model_id == DeterministicEmbedder::ID {
+        return Ok(Box::new(DeterministicEmbedder::default()));
+    }
+    if model_id.starts_with(potion::DEFAULT_REPO) {
+        let p = potion::PotionEmbedder::load_default()?;
+        anyhow::ensure!(
+            p.id() == model_id,
+            "cached model identity {} != manifest {} — weights changed, rebuild required",
+            p.id(),
+            model_id
+        );
+        return Ok(Box::new(p));
+    }
+    anyhow::bail!("unknown model id: {model_id}")
+}
+
+/// Default build embedder: potion (the quality default). No silent
+/// fallback — callers decide policy via `--deterministic` or `og model install`.
+pub fn default_embedder() -> Result<Box<dyn Embedder>> {
+    Ok(Box::new(potion::PotionEmbedder::load_default()?))
 }
 
 /// Deterministic test embedder for the vertical slice (tk-4a8q).

@@ -4,6 +4,7 @@
 
 pub mod build;
 pub mod clean;
+pub mod model;
 pub mod search;
 pub mod status;
 
@@ -81,6 +82,9 @@ enum Command {
         /// Directory to index.
         #[arg(default_value = ".")]
         path: PathBuf,
+        /// Use the deterministic test embedder (no model download; no semantic signal).
+        #[arg(long = "deterministic")]
+        deterministic: bool,
         /// Suppress progress.
         #[arg(short = 'q', long = "quiet")]
         quiet: bool,
@@ -97,6 +101,19 @@ enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Embedding model management.
+    Model {
+        #[command(subcommand)]
+        action: ModelAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ModelAction {
+    /// Show model status.
+    Status,
+    /// Download the default model.
+    Install,
 }
 
 /// Main CLI entry point.
@@ -104,9 +121,15 @@ pub fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Command::Build { path, quiet }) => build::run(&path, quiet),
+        Some(Command::Build { path, deterministic, quiet }) => {
+            build::run(&path, deterministic, quiet)
+        }
         Some(Command::Status { path }) => status::run(&path),
         Some(Command::Clean { path }) => clean::run(&path),
+        Some(Command::Model { action }) => match action {
+            ModelAction::Status => model::status(),
+            ModelAction::Install => model::install(),
+        },
         None if cli.query.is_none() => {
             use clap::CommandFactory;
             Cli::command().print_help()?;

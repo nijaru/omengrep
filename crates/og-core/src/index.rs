@@ -19,7 +19,7 @@ use rayon::prelude::*;
 
 use crate::catalog;
 use crate::manifest::{Manifest, MANIFEST_VERSION};
-use crate::model::{DeterministicEmbedder, Embedder};
+use crate::model::Embedder;
 use crate::scan;
 use crate::types::{Block, IndexStats};
 use crate::vectors::{VectorStore, VectorWriter};
@@ -54,10 +54,6 @@ impl Index {
         })
     }
 
-    /// True when the model identity matches the default build embedder.
-    pub fn matches_default_model(&self) -> bool {
-        self.manifest.model_id == DeterministicEmbedder::ID
-    }
 }
 
 /// Find the nearest enclosing index root: walk up from `start` looking for

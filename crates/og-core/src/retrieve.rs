@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 use crate::index::Index;
-use crate::model::Embedder;
 use crate::types::SearchResult;
 
 /// RRF constant (standard 60 from TREC).
@@ -98,8 +97,8 @@ pub fn similar(
         return Ok(Vec::new());
     };
 
-    // Vector channel: embed the reference content, exact scan.
-    let embedder = crate::model::DeterministicEmbedder::new(index.manifest.dims);
+    // Vector channel: embed the reference content, exact scan (manifest-pinned model).
+    let embedder = crate::model::embedder_for(&index.manifest.model_id)?;
     let embedded = embedder.embed(&[&ref_content])?;
     let vector_hits = index.vectors.top_k(&embedded[0], k + 1);
 
@@ -172,11 +171,11 @@ fn trigram_search(conn: &rusqlite::Connection, query: &str, k: usize) -> Result<
     Ok(rows)
 }
 
-/// Vector exact scan. The embedder is constructed from the manifest's pinned
-/// identity; tk-7wp8 swaps the deterministic embedder for potion-code
-/// without touching this call site.
+/// Vector exact scan. The embedder is constructed from the manifest's
+/// pinned identity — never a default — so query and index vectors live in
+/// the same space. Cache-miss at query time degrades to no vector channel.
 fn vector_search(index: &Index, query: &str, k: usize) -> Result<Channel> {
-    let embedder = crate::model::DeterministicEmbedder::new(index.manifest.dims);
+    let embedder = crate::model::embedder_for(&index.manifest.model_id)?;
     let embedded = embedder.embed(&[query])?;
     Ok(index.vectors.top_k(&embedded[0], k))
 }

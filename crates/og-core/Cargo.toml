@@ -46,5 +46,11 @@ tree-sitter-html = "0.23"
 tree-sitter-css = "0.25"
 tree-sitter-hcl = "1"
 
+# Static Model2Vec embedder (tk-7wp8)
+tokenizers = { version = "0.23", default-features = false, features = ["onig"] }
+safetensors = "0.8"
+hf-hub = "0.5"
+half = "2"
+
 [dev-dependencies]
 tempfile = "3"
