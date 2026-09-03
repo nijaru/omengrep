@@ -1,0 +1,24 @@
+[package]
+name = "og"
+description = "Semantic code search — hybrid BM25 + vectors on owned storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "og"
+path = "src/main.rs"
+
+[dependencies]
+og-core = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+owo-colors = { workspace = true }
+indicatif = { workspace = true }
+regex = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
