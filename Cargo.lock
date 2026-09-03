@@ -1448,7 +1448,6 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
- "indicatif",
  "og-core",
  "owo-colors",
  "predicates",
@@ -1475,7 +1474,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
  "tokenizers",
  "tree-sitter",
  "tree-sitter-bash",
@@ -1501,7 +1499,6 @@ dependencies = [
  "tree-sitter-typescript",
  "tree-sitter-yaml",
  "tree-sitter-zig",
- "walkdir",
 ]
 
 [[package]]

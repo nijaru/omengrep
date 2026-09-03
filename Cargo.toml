@@ -13,10 +13,8 @@ homepage = "https://github.com/nijaru/omengrep"
 og-core = { path = "crates/og-core" }
 
 anyhow = "1"
-thiserror = "2"
 clap = { version = "4", features = ["derive"] }
 owo-colors = "4"
-indicatif = "0.18"
 ignore = "0.4"
 rayon = "1"
 regex = "1"
@@ -25,7 +23,6 @@ serde_json = "1"
 blake3 = "1"
 rusqlite = { version = "0.40", features = ["bundled"] }
 memmap2 = "0.9"
-walkdir = "2"
 
 [profile.release]
 lto = "thin"

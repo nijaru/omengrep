@@ -8,7 +8,6 @@ repository.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 ignore = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
@@ -17,7 +16,6 @@ serde_json = { workspace = true }
 blake3 = { workspace = true }
 rusqlite = { workspace = true }
 memmap2 = { workspace = true }
-walkdir = { workspace = true }
 owo-colors = { workspace = true }
 
 # Tree-sitter (25 languages, ported from og v0.0.3)

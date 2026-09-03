@@ -432,12 +432,16 @@ fn rel_path(root: &Path, path: &Path) -> Result<String> {
 /// Copy a directory tree (previous generation -> staging).
 fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
-    for entry in walkdir::WalkDir::new(src) {
+    copy_dir_inner(src, dst)
+}
+
+fn copy_dir_inner(src: &Path, dst: &Path) -> Result<()> {
+    for entry in std::fs::read_dir(src)? {
         let entry = entry?;
-        let rel = entry.path().strip_prefix(src)?;
-        let target = dst.join(rel);
-        if entry.path().is_dir() {
+        let target = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
             std::fs::create_dir_all(&target)?;
+            copy_dir_inner(&entry.path(), &target)?;
         } else {
             std::fs::copy(entry.path(), &target)?;
         }
