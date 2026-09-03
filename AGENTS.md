@@ -91,7 +91,7 @@ src/                # Legacy v0.0.3 omendb-backed source (reference only, not bu
 | Build  | `cargo build --release`          | Zero errors     |
 | Test   | `cargo test`                     | All pass        |
 | Smoke  | `og "test" ./src`                | Returns results |
-| Lint   | `cargo clippy`                   | No warnings     |
+| Lint   | `cargo clippy --all-targets -- -D warnings` | No warnings (CI lints tests too; plain `clippy` does not) |
 
 ## Public Docs and Benchmarks
 
