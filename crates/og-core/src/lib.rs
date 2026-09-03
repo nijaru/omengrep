@@ -7,12 +7,14 @@
 //! - vectors:   mmap fp16 sidecar, rayon exact scan
 //! - model:     Embedder trait; deterministic test embedder (potion in tk-7wp8)
 //! - retrieve:  BM25 + trigram + vector channels, RRF fusion
+//! - context:   outline + ranked context packing (ported from og v0.0.3)
 //! - index:     generation build + atomic CURRENT publish + open
 //! - search:    query surface incl. file#name / file:line refs
 //! - boost/output/tokenize/synonyms: ported ranking + presentation policy
 
 pub mod boost;
 pub mod catalog;
+pub mod context;
 pub mod extract;
 pub mod index;
 pub mod manifest;

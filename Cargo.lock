@@ -1453,6 +1453,7 @@ dependencies = [
  "owo-colors",
  "predicates",
  "regex",
+ "serde_json",
  "tempfile",
 ]
 

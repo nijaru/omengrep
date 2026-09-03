@@ -1,10 +1,12 @@
-//! og CLI: search, build, status, clean. Slice scope keeps the same
-//! product surface as v0.0.3 minus model management (embedder is
-//! deterministic until tk-7wp8) and outline/context (tk-4z53).
+//! og CLI: search, build, status, clean, outline, context. The embedder is
+//! the native static Model2Vec default (tk-7wp8); outline/context ported
+//! onto the catalog in tk-4z53.
 
 pub mod build;
 pub mod clean;
+pub mod context;
 pub mod model;
+pub mod outline;
 pub mod search;
 pub mod status;
 
@@ -104,6 +106,48 @@ enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Show block structure of an indexed file.
+    Outline {
+        /// File or directory to outline.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// JSON output.
+        #[arg(short = 'j', long = "json")]
+        json: bool,
+        /// Output full function/class signatures without bodies.
+        #[arg(long = "skeleton")]
+        skeleton: bool,
+        /// Token budget for packed output (~4 chars/token).
+        #[arg(long = "max-tokens", default_value = "8000")]
+        max_tokens: usize,
+        /// Suppress progress.
+        #[arg(short = 'q', long = "quiet")]
+        quiet: bool,
+    },
+    /// Show ranked files and symbols for compact code context.
+    Context {
+        /// File or directory to summarize.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Number of files to show.
+        #[arg(short = 'n', default_value = "12")]
+        num_files: usize,
+        /// Number of symbols per file.
+        #[arg(long = "symbols", default_value = "5")]
+        symbols_per_file: usize,
+        /// JSON output.
+        #[arg(short = 'j', long = "json")]
+        json: bool,
+        /// Include skeleton snippets.
+        #[arg(long = "skeleton")]
+        skeleton: bool,
+        /// Token budget for packed output (~4 chars/token).
+        #[arg(long = "max-tokens", default_value = "8000")]
+        max_tokens: usize,
+        /// Suppress progress.
+        #[arg(short = 'q', long = "quiet")]
+        quiet: bool,
+    },
     /// Embedding model management.
     Model {
         #[command(subcommand)]
@@ -131,6 +175,36 @@ pub fn run() -> anyhow::Result<()> {
             quiet,
         }) => build::run(&path, deterministic, force, quiet),
         Some(Command::Status { path }) => status::run(&path),
+        Some(Command::Outline {
+            path,
+            json,
+            skeleton,
+            max_tokens,
+            quiet,
+        }) => outline::run(&outline::OutlineParams {
+            path: &path,
+            json,
+            skeleton,
+            max_tokens,
+            quiet,
+        }),
+        Some(Command::Context {
+            path,
+            num_files,
+            symbols_per_file,
+            json,
+            skeleton,
+            max_tokens,
+            quiet,
+        }) => context::run(&context::ContextParams {
+            path: &path,
+            num_files,
+            symbols_per_file,
+            json,
+            skeleton,
+            max_tokens,
+            quiet,
+        }),
         Some(Command::Clean { path }) => clean::run(&path),
         Some(Command::Model { action }) => match action {
             ModelAction::Status => model::status(),

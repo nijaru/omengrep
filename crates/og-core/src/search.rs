@@ -55,7 +55,7 @@ pub fn run_search(
     Ok(results)
 }
 
-fn auto_build_enabled() -> bool {
+pub(crate) fn auto_build_enabled() -> bool {
     std::env::var("OG_AUTO_BUILD")
         .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
         .unwrap_or(false)
