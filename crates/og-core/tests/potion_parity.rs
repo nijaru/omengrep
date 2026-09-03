@@ -61,7 +61,7 @@ fn potion_matches_reference() {
 
 /// Minimal .npy header-length parser (magic 6 + ver 2 + u16/u32 len).
 fn parse_npy_header_len(raw: &[u8]) -> Option<usize> {
-    if raw.len() < 10 || &raw[..6] != &[0x93, b'N', b'U', b'M', b'P', b'Y'] {
+    if raw.len() < 10 || raw[..6] != [0x93, b'N', b'U', b'M', b'P', b'Y'] {
         return None;
     }
     let (major, minor) = (raw[6], raw[7]);
