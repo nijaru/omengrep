@@ -100,7 +100,45 @@ pub fn get_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
     }
 }
 
-/// Insert a file and its blocks in one transaction.
+/// Path -> (size, mtime) for every indexed file (incremental diff input).
+pub fn file_fingerprints(conn: &Connection) -> Result<std::collections::HashMap<String, (i64, i64)>> {
+    let mut stmt = conn.prepare("SELECT path, size, mtime FROM files")?;
+    let rows = stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?)))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows.into_iter().map(|(p, s, m)| (p, (s, m))).collect())
+}
+
+/// Remove a file and all its blocks. Returns the deleted block rowids so the
+/// caller can zero their vector rows. FTS rows are keyed by the same rowids.
+pub fn delete_file(conn: &Connection, rel_path: &str) -> Result<Vec<i64>> {
+    let tx = conn.unchecked_transaction()?;
+    let ids: Vec<i64> = {
+        let mut stmt = tx.prepare("SELECT id FROM blocks WHERE file = ?1")?;
+        stmt.query_map(params![rel_path], |row| row.get::<_, i64>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+    };
+    for id in &ids {
+        tx.execute("DELETE FROM block_fts WHERE rowid = ?1", params![id])?;
+        tx.execute("DELETE FROM block_trigram WHERE rowid = ?1", params![id])?;
+    }
+    // Files row delete cascades to blocks (FK ON DELETE CASCADE).
+    tx.execute("DELETE FROM files WHERE path = ?1", params![rel_path])?;
+    tx.commit()?;
+    Ok(ids)
+}
+
+pub fn count_blocks(conn: &Connection) -> Result<usize> {
+    Ok(conn.query_row("SELECT COUNT(*) FROM blocks", [], |r| r.get::<_, i64>(0))? as usize)
+}
+
+pub fn count_files(conn: &Connection) -> Result<usize> {
+    Ok(conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get::<_, i64>(0))? as usize)
+}
+
+/// Insert a file and its blocks in one transaction. Returns the rowids
+/// SQLite assigned, in block order (vector rows must be written at these
+/// exact positions — SQLite may reuse a freed max rowid).
 pub fn insert_file(
     conn: &Connection,
     rel_path: &str,
@@ -108,11 +146,11 @@ pub fn insert_file(
     mtime: i64,
     hash: &str,
     blocks: &[Block],
-) -> Result<()> {
+) -> Result<Vec<i64>> {
     let tx = conn.unchecked_transaction()?;
-    insert_file_inner(&tx, rel_path, size, mtime, hash, blocks)?;
+    let rowids = insert_file_inner(&tx, rel_path, size, mtime, hash, blocks)?;
     tx.commit()?;
-    Ok(())
+    Ok(rowids)
 }
 
 fn insert_file_inner(
@@ -122,12 +160,13 @@ fn insert_file_inner(
     mtime: i64,
     hash: &str,
     blocks: &[Block],
-) -> Result<()> {
+) -> Result<Vec<i64>> {
     tx.execute(
         "INSERT INTO files(path, size, mtime, hash) VALUES (?1, ?2, ?3, ?4)",
         params![rel_path, size, mtime, hash],
     )?;
 
+    let mut rowids = Vec::with_capacity(blocks.len());
     for block in blocks {
         let searchable = crate::tokenize::split_identifiers(&block.embedding_text());
         tx.execute(
@@ -145,16 +184,18 @@ fn insert_file_inner(
             ],
         )?;
         let block_id = tx.last_insert_rowid();
+        rowids.push(block_id);
 
+        // FTS rowid = block rowid: deletes are O(log n) keyed lookups.
         tx.execute(
-            "INSERT INTO block_fts(block_id, terms) VALUES (?1, ?2)",
+            "INSERT INTO block_fts(rowid, block_id, terms) VALUES (?1, ?1, ?2)",
             params![block_id, searchable],
         )?;
         tx.execute(
-            "INSERT INTO block_trigram(block_id, trigram) VALUES (?1, ?2)",
+            "INSERT INTO block_trigram(rowid, block_id, trigram) VALUES (?1, ?1, ?2)",
             params![block_id, block.name],
         )?;
     }
 
-    Ok(())
+    Ok(rowids)
 }

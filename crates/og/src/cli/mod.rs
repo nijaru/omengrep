@@ -85,6 +85,9 @@ enum Command {
         /// Use the deterministic test embedder (no model download; no semantic signal).
         #[arg(long = "deterministic")]
         deterministic: bool,
+        /// Force a full rebuild.
+        #[arg(short = 'f', long = "force")]
+        force: bool,
         /// Suppress progress.
         #[arg(short = 'q', long = "quiet")]
         quiet: bool,
@@ -121,9 +124,12 @@ pub fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Command::Build { path, deterministic, quiet }) => {
-            build::run(&path, deterministic, quiet)
-        }
+        Some(Command::Build {
+            path,
+            deterministic,
+            force,
+            quiet,
+        }) => build::run(&path, deterministic, force, quiet),
         Some(Command::Status { path }) => status::run(&path),
         Some(Command::Clean { path }) => clean::run(&path),
         Some(Command::Model { action }) => match action {

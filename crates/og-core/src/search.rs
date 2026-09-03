@@ -16,11 +16,26 @@ pub fn run_search(
     path: &Path,
     num_results: usize,
     with_semantic: bool,
+    quiet: bool,
 ) -> Result<Vec<SearchResult>> {
     let start = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let (index_root, found) = index::find_index_root(&start);
     if !found {
-        anyhow::bail!("No index found. Run 'og build' first.");
+        // Auto-build (v0.0.3 OG_AUTO_BUILD behavior).
+        if auto_build_enabled() {
+            let embedder = crate::model::default_embedder()?;
+            index::build_with(&start, embedder.as_ref(), false, index::Incremental::Auto)?;
+        } else {
+            anyhow::bail!("No index found. Run 'og build' first.\nTip: OG_AUTO_BUILD=1 enables auto-indexing.");
+        }
+    }
+
+    // Auto-update stale files before searching (v0.0.3 behavior). Errors
+    // are non-fatal: a stale index still answers via BM25.
+    if found
+        && let Ok(true) = index::update_if_stale(&index_root, quiet)
+    {
+        eprintln!("Index updated");
     }
 
     let idx = Index::open(&index_root)?;
@@ -38,6 +53,12 @@ pub fn run_search(
     }
 
     Ok(results)
+}
+
+fn auto_build_enabled() -> bool {
+    std::env::var("OG_AUTO_BUILD")
+        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
 }
 
 /// Similar-code search from a file reference (file#name, file:line, file).

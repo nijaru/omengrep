@@ -5,7 +5,7 @@
 //! against a normalized query vector.
 
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use memmap2::Mmap;
@@ -107,13 +107,19 @@ impl VectorStore {
     }
 }
 
-/// Append-only writer for building a vector sidecar alongside the catalog.
-/// Rows must be written in the same order as catalog block inserts.
+/// Position-addressed writer for the vector sidecar.
+///
+/// Rows live at explicit 1-based rowid positions matching `blocks.id`.
+/// SQLite may reuse deleted max rowids, so rows are NEVER appended by
+/// position arithmetic — callers pass the rowid that SQLite actually
+/// assigned. Gaps (never-reused holes) are zero-padded; the similarity
+/// floor makes them unreachable. No BufWriter: seek+write per row keeps
+/// positioning unambiguous.
 pub struct VectorWriter {
-    file: std::io::BufWriter<File>,
+    file: std::fs::File,
     dims: usize,
-    rows: usize,
-    path: PathBuf,
+    /// Highest rowid ever written (== sidecar row count).
+    max_row: i64,
 }
 
 impl VectorWriter {
@@ -124,46 +130,92 @@ impl VectorWriter {
         let file = File::create(path)
             .with_context(|| format!("creating vector store {}", path.display()))?;
         Ok(Self {
-            file: std::io::BufWriter::new(file),
+            file,
             dims,
-            rows: 0,
-            path: path.to_path_buf(),
+            max_row: 0,
         })
     }
 
-    pub fn write_vec(&mut self, vec: &[f32]) -> Result<usize> {
+    /// Open an existing sidecar for in-place row updates (incremental path).
+    pub fn open_existing(path: &Path, dims: usize) -> Result<Self> {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .with_context(|| format!("opening vector store for update {}", path.display()))?;
+        let rows = file.metadata()?.len() as i64 / (dims as i64 * FP32_BYTES as i64);
+        Ok(Self {
+            file,
+            dims,
+            max_row: rows,
+        })
+    }
+
+    /// Current row count (== max rowid written).
+    pub fn rows(&self) -> i64 {
+        self.max_row
+    }
+
+    fn row_bytes(&self) -> usize {
+        self.dims * FP32_BYTES
+    }
+
+    /// Write a vector at its 1-based rowid. Zero-pads gaps below `rowid`.
+    pub fn write_at(&mut self, rowid: i64, vec: &[f32]) -> Result<()> {
         anyhow::ensure!(
             vec.len() == self.dims,
             "vector dim {} != expected {}",
             vec.len(),
             self.dims
         );
+        anyhow::ensure!(rowid >= 1, "rowid must be >= 1, got {rowid}");
+        self.seek_row(rowid)?;
+        self.write_row_bytes(vec)?;
+        if rowid > self.max_row {
+            self.max_row = rowid;
+        }
+        Ok(())
+    }
+
+    /// Zero the rows of deleted blocks (holes stay unreachable via floor).
+    pub fn zero_rows(&mut self, rowids: &[i64]) -> Result<()> {
+        let zeros = vec![0.0f32; self.dims];
+        for id in rowids {
+            if *id >= 1 && *id <= self.max_row {
+                self.write_at(*id, &zeros)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn seek_row(&mut self, rowid: i64) -> Result<()> {
+        use std::io::Seek;
+        let offset = (rowid - 1) as u64 * self.row_bytes() as u64;
+        self.file
+            .seek(std::io::SeekFrom::Start(offset))
+            .with_context(|| format!("seeking vector row {rowid}"))?;
+        Ok(())
+    }
+
+    fn write_row_bytes(&mut self, vec: &[f32]) -> Result<()> {
         let mut bytes = Vec::with_capacity(vec.len() * FP32_BYTES);
         for &v in vec {
             bytes.extend_from_slice(&v.to_le_bytes());
         }
         use std::io::Write;
         self.file.write_all(&bytes)?;
-        self.rows += 1;
-        Ok(self.rows)
+        Ok(())
     }
 
-    pub fn rows(&self) -> usize {
-        self.rows
-    }
-
-    pub fn finish(mut self) -> Result<PathBuf> {
-        use std::io::Write;
-        self.file.flush()?;
-        let f = self.file.into_inner()?;
-        f.sync_all()?;
-        Ok(self.path)
+    pub fn finish(self) -> Result<()> {
+        self.file.sync_all()?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn tempdir() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -182,8 +234,8 @@ mod tests {
         let b = normalize(&b);
 
         let mut w = VectorWriter::create(&path, dims).unwrap();
-        w.write_vec(&a).unwrap();
-        w.write_vec(&b).unwrap();
+        w.write_at(1, &a).unwrap();
+        w.write_at(2, &b).unwrap();
         w.finish().unwrap();
 
         let store = VectorStore::open(&path, dims).unwrap();

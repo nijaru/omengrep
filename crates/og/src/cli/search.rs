@@ -37,7 +37,7 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
 
     let t0 = Instant::now();
     let mut results =
-        search::run_search(query, params.path, params.num_results, !params.no_semantic)?;
+        search::run_search(query, params.path, params.num_results, !params.no_semantic, params.quiet)?;
     let search_time = t0.elapsed();
 
     if results.is_empty() {
