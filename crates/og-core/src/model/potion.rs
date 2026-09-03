@@ -215,13 +215,28 @@ fn median(sorted: &mut [usize]) -> usize {
 }
 
 /// Download (or resolve from cache) the default potion model.
+///
+/// Latency gate (tk-1i9o): every CLI invocation resolves the model, so a
+/// cached model must NEVER touch the network. `Repo::get` is the offline
+/// cache lookup; `Repo::download` revalidates against the server (~2.4s
+/// for 3 files) and is only used on a true cache miss (first install).
 fn download_default_model() -> Result<PathBuf> {
     use hf_hub::api::sync::Api;
 
     let api = Api::new().context("creating HF API client (offline?)")?;
     let repo = api.model(DEFAULT_REPO.to_string());
+    let names = ["model.safetensors", "tokenizer.json", "config.json"];
+
+    let cached: Vec<PathBuf> = names.iter().filter_map(|n| repo.get(n).ok()).collect();
+    if cached.len() == names.len() {
+        return cached[0]
+            .parent()
+            .map(Path::to_path_buf)
+            .context("snapshot dir");
+    }
+
     let mut files = Vec::new();
-    for name in ["model.safetensors", "tokenizer.json", "config.json"] {
+    for name in names {
         let path = repo
             .download(name)
             .with_context(|| format!("downloading {name} from {DEFAULT_REPO} (run 'og model install' with network)"))?;

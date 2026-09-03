@@ -152,8 +152,14 @@ pub fn build_with(
     // generation is complete and immutable the moment CURRENT flips.
     manifest.write(&staging.join("manifest.json"))?;
 
-    // Generation name derives from content + model identity.
-    let name_input = format!("{}\x1f{}", manifest.content_hash, manifest.model_id);
+    // Generation name derives from content + model identity + storage
+    // schema: any of the three changing must publish a new directory, or a
+    // schema bump would discard the fresh build (same name as the existing
+    // generation) and leave the old row format behind for a new reader.
+    let name_input = format!(
+        "{}\x1f{}\x1f{}",
+        manifest.content_hash, manifest.model_id, manifest.schema_version
+    );
     let gen_hex = blake3::hash(name_input.as_bytes()).to_hex().to_string();
     let gen_name = format!("g-{}", &gen_hex[..12]);
     let final_dir = og_dir.join("generations").join(&gen_name);

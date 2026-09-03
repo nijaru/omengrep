@@ -11,8 +11,9 @@ use anyhow::{Context, Result};
 use memmap2::Mmap;
 use rayon::prelude::*;
 
-/// Per-row bytes for f32 vectors (future neural tier keeps fp32 precision).
-const FP32_BYTES: usize = 4;
+/// Per-row bytes for fp16 vectors (tk-1i9o scale gate: halves the sidecar
+/// and search RSS vs f32; cosine deviation < 1e-3 on 256-d unit vectors).
+const FP16_BYTES: usize = 2;
 
 /// Minimum cosine similarity for a hit. Filters channel noise: unrelated
 /// texts hover near 0 (random 256-d pairs std-dev ~0.06), related code sits
@@ -27,13 +28,13 @@ pub struct VectorStore {
 }
 
 impl VectorStore {
-    /// Open `vectors-000.bin` with `dims` dimensions, f32 rows.
+    /// Open `vectors-000.bin` with `dims` dimensions, fp16 rows.
     pub fn open(path: &Path, dims: usize) -> Result<Self> {
         let file = File::open(path)
             .with_context(|| format!("opening vector store {}", path.display()))?;
         let mmap = unsafe { Mmap::map(&file) }
             .with_context(|| format!("mmapping vector store {}", path.display()))?;
-        let row_bytes = dims * FP32_BYTES;
+        let row_bytes = dims * FP16_BYTES;
         if mmap.len() % row_bytes != 0 {
             anyhow::bail!(
                 "vector store size {} not a multiple of row size {}",
@@ -75,17 +76,9 @@ impl VectorStore {
                 let bytes = self.row(i);
                 let mut dot = 0.0f32;
                 for (j, &q) in query.iter().enumerate() {
-                    // f32 rows: little-endian lanes
-                    let bytes_j =
-                        &bytes[j * FP32_BYTES..(j + 1) * FP32_BYTES];
-                    let bits = u32::from_le_bytes([
-                        bytes_j[0],
-                        bytes_j[1],
-                        bytes_j[2],
-                        bytes_j[3],
-                    ]);
-                    let v = f32::from_bits(bits);
-                    dot += q * v;
+                    // fp16 rows: little-endian lanes, decoded to f32
+                    let lane = [bytes[j * FP16_BYTES], bytes[j * FP16_BYTES + 1]];
+                    dot += q * half::f16::from_le_bytes(lane).to_f32();
                 }
                 dot
             })
@@ -142,7 +135,7 @@ impl VectorWriter {
             .write(true)
             .open(path)
             .with_context(|| format!("opening vector store for update {}", path.display()))?;
-        let rows = file.metadata()?.len() as i64 / (dims as i64 * FP32_BYTES as i64);
+        let rows = file.metadata()?.len() as i64 / (dims as i64 * FP16_BYTES as i64);
         Ok(Self {
             file,
             dims,
@@ -156,7 +149,7 @@ impl VectorWriter {
     }
 
     fn row_bytes(&self) -> usize {
-        self.dims * FP32_BYTES
+        self.dims * FP16_BYTES
     }
 
     /// Write a vector at its 1-based rowid. Zero-pads gaps below `rowid`.
@@ -197,9 +190,9 @@ impl VectorWriter {
     }
 
     fn write_row_bytes(&mut self, vec: &[f32]) -> Result<()> {
-        let mut bytes = Vec::with_capacity(vec.len() * FP32_BYTES);
+        let mut bytes = Vec::with_capacity(vec.len() * FP16_BYTES);
         for &v in vec {
-            bytes.extend_from_slice(&v.to_le_bytes());
+            bytes.extend_from_slice(&half::f16::from_f32(v).to_le_bytes());
         }
         use std::io::Write;
         self.file.write_all(&bytes)?;
@@ -242,9 +235,40 @@ mod tests {
         assert_eq!(store.len(), 2);
 
         let top = store.top_k(&a, 2);
-        // a matches itself with cosine 1.0 (rows are unit-normalized)
+        // a matches itself with cosine ~1.0 (fp16 lane error ~2^-11)
         assert_eq!(top[0].0, 1);
-        assert!((top[0].1 - 1.0).abs() < 1e-5, "cosine: {}", top[0].1);
+        assert!((top[0].1 - 1.0).abs() < 5e-3, "cosine: {}", top[0].1);
+    }
+
+    #[test]
+    fn fp16_cosine_deviation_negligible() {
+        // 256-d unit vectors: fp16 storage must not move cosine past the
+        // ranking noise floor (floor is 0.30; deviation budget 1e-3).
+        let (_dir, path) = tempdir();
+        let dims = 256;
+        let a = normalize(&(0..dims).map(|i| (i as f32 * 0.7).sin() + 2.0).collect::<Vec<_>>());
+        // b close to a: high cosine, exercises lane precision, not filtering
+        let b = normalize(
+            &a.iter()
+                .enumerate()
+                .map(|(i, x)| x + 0.01 * ((i as f32 * 1.3).sin()))
+                .collect::<Vec<_>>(),
+        );
+        let mut w = VectorWriter::create(&path, dims).unwrap();
+        w.write_at(1, &a).unwrap();
+        w.write_at(2, &b).unwrap();
+        w.finish().unwrap();
+
+        let f32_dot: f32 = a.iter().zip(&b).map(|(x, y)| x * y).sum();
+        assert!(f32_dot > 0.99, "test setup: f32 dot {f32_dot}");
+        let store = VectorStore::open(&path, dims).unwrap();
+        let top = store.top_k(&a, 2);
+        assert_eq!(top[0].0, 1);
+        let cross = top.iter().find(|(id, _)| *id == 2).map(|(_, s)| *s);
+        match cross {
+            Some(c) => assert!((c - f32_dot).abs() < 1e-3, "f32 {f32_dot} vs fp16 {c}"),
+            None => panic!("near-duplicate row filtered: f32 dot {f32_dot}"),
+        }
     }
 
     fn normalize(v: &[f32]) -> Vec<f32> {
