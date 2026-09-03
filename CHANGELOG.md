@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.1.0] - 2026-09-03
+
+Complete Rust rewrite on owned storage (no OmenDB, no ONNX runtime). The
+index format changed: delete old `.og` directories or run `og build`,
+which builds a fresh generation alongside legacy files without touching
+them. Old `.og` indexes are not readable by 0.1.0 and vice versa.
+
+### Added
+
+- `og outline` / `og context` ported onto the new catalog, with
+  token-budgeted packing (`--max-tokens`, default 8000) for agent use.
+- `og model status` / `og model install` for the default embedding model.
+- `og build --force` for explicit full rebuilds; `--deterministic` test
+  embedder hatch (no model download, no semantic signal).
+- Incremental builds: fingerprint diffing re-embeds only changed files;
+  generations publish atomically via CURRENT; stale auto-update before
+  search; `OG_AUTO_BUILD=1` auto-indexing.
+- `bench/`: deterministic corpus generator, scale/parity/eval harnesses,
+  repo qrels fixture, and measured gate results in `bench/results/`.
+- Measured gates (M3 Max, 16 cores): query p99 575ms at 500k blocks,
+  search RSS under 500 MB (flat exact scan, no ANN), identifier
+  Recall@10 1.000 on the repo qrels.
+
+### Changed
+
+- Default model is now `minishlab/potion-code-16M-v2` (static Model2Vec,
+  256-d, MIT), loaded natively — no ONNX runtime, sub-100ms startup,
+  offline after first download.
+- Vector sidecar rows are fp16 (halved scan RSS); BM25 runs on SQLite
+  FTS5 with identifier-split terms (OR-matched) plus a trigram channel;
+  channels fuse with RRF (k=60) then code-aware boosts.
+- Install path is now `cargo install --path crates/og` (workspace).
+
+### Removed
+
+- OmenDB storage backend and the ONNX embedding runtime (+ `ort`).
+- MCP server (`og mcp`), `og list`, and `og install-claude-code`.
+  CLI + `--json` is the agent interface.
+
+### Fixed
+
+- Lexical search OR-matches and BM25-ranks instead of AND-filtering to
+  empty on partial term matches.
+- Generation names mix content + model + schema, so upgrades publish a
+  new directory instead of stranding an old row format behind a new
+  reader.
+- Cached models resolve without network revalidation (was ~2.4s per
+  invocation).
+
 ## [0.0.3] - 2026-04-26
 
 ### Added

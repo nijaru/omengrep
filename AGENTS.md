@@ -1,12 +1,12 @@
 # omengrep (og)
 
-**Semantic code search — multi-vector embeddings + BM25**
+**Semantic code search — static embeddings + BM25, owned SQLite storage**
 
 ## Quick Reference
 
 ```bash
 cargo build --release                 # Build
-cargo install --path .                # Install binary
+cargo install --path crates/og       # Install binary
 og build ./src                        # Build index (required first)
 og "query" ./src                      # Semantic search (text query)
 og file.rs#func                       # Find similar code (by name)
@@ -19,67 +19,60 @@ cargo test                            # Run tests
 ## Architecture
 
 ```
-Build:  Scan (ignore crate) -> Extract (tree-sitter, 25 langs) -> Embed (ort, LateOn-Code-edge INT8) -> Store (omendb multi-vector) + index_text (BM25)
-Search: Embed query -> search_multi_with_text (BM25 candidates + MuVERA MaxSim rerank) -> Code-aware boost -> Results
+Build:  Scan (ignore crate) -> Extract (tree-sitter, 25 langs) -> Embed (potion static Model2Vec, native loader) -> Catalog (SQLite FTS5) + Vectors (mmap fp16 sidecar)
+Search: Embed query -> BM25 + trigram + exact vector scan -> RRF fuse -> Code-aware boost -> Results
 
-Index hierarchy:
-- Building: checks parent (refuses if exists), merges subdirs (fast vector copy)
-- Searching: walks up to find index, filters results to search scope
+Index generations (.og/):
+- Build stages a generation dir, writes the manifest inside it, then flips CURRENT atomically
+- Generation name mixes content + model identity + schema version (any change publishes a new dir)
+- Incremental: fingerprint diff re-embeds changed files only; vector rows are position-addressed at SQLite-assigned rowids (SQLite reuses freed max rowids — never append by arithmetic)
+- Searching: walks up to find index, filters results to search scope, stale-check auto-updates before search
 ```
 
 | Component  | Implementation                                        |
 | ---------- | ----------------------------------------------------- |
 | Scanner    | `ignore` crate (gitignore-aware, binary detection)    |
 | Extraction | Tree-sitter AST (25 languages)                        |
-| Embeddings | `ort` (LateOn-Code-edge INT8 ONNX, 48d/token)        |
-| Vector DB  | omendb (MuVERA multi-vector + BM25 hybrid)            |
-| Boosting   | Code-aware heuristics (name match, type, path)        |
+| Embeddings | Native static Model2Vec (`minishlab/potion-code-16M-v2`, 256-d) |
+| Vector store | mmap fp16 sidecar + rayon exact scan (no ANN)       |
+| Lexical    | SQLite FTS5 (unicode61 identifier-split terms + trigram names) |
+| Fusion     | RRF (k=60) + code-aware boosts (name match, type, path) |
 
 ## Project Structure
 
 ```
-src/
-├── main.rs                 # Entry point
-├── lib.rs                  # Re-exports
-├── types.rs                # Block, SearchResult, FileRef
-├── boost.rs                # Code-aware ranking boosts
-├── tokenize.rs             # BM25 identifier splitting
-├── cli/
-│   ├── mod.rs              # Command dispatch (clap)
-│   ├── search.rs           # Search command + file ref parsing
-│   ├── build.rs            # Build/update index
-│   ├── status.rs           # Index status
-│   ├── clean.rs            # Delete index
-│   ├── list.rs             # List indexes
-│   ├── outline.rs          # Structural block/skeleton output
-│   ├── context.rs          # Ranked file/symbol context
-│   ├── model.rs            # Model management
-│   └── output.rs           # Result formatting (default, json, no-content, files-only)
-├── embedder/
-│   ├── mod.rs              # Embedder trait + factory
-│   ├── onnx.rs             # ORT ONNX inference (LateOn-Code-edge)
-│   └── tokenizer.rs        # HuggingFace tokenizer wrapper
-├── extractor/
-│   ├── mod.rs              # Tree-sitter extraction coordinator
-│   ├── languages.rs        # Language registry (extension -> parser + query)
-│   ├── queries.rs          # Tree-sitter query definitions per language
-│   └── text.rs             # Markdown/prose chunking
-└── index/
-    ├── mod.rs              # SemanticIndex (omendb multi-vector)
-    ├── manifest.rs         # Manifest v10 (JSON, tracks files/hashes/blocks)
-    └── walker.rs           # File walker (ignore crate, gitignore-aware)
-Cargo.toml
+crates/og/          # CLI binary (clap): search, build, status, clean, outline, context, model
+crates/og-core/     # All product logic
+├── lib.rs          # Re-exports
+├── types.rs        # Block, SearchResult, FileRef
+├── index.rs        # Generations, incremental builds, atomic CURRENT publish, open
+├── catalog.rs      # SQLite: files, blocks, block_fts, block_trigram (SCHEMA_VERSION)
+├── vectors.rs      # mmap fp16 sidecar, rayon exact scan, position-addressed writer
+├── retrieve.rs     # BM25 + trigram + vector channels, RRF fusion
+├── search.rs       # Query surface incl. file#name / file:line refs
+├── context/        # outline + ranked context packing (ported policy)
+├── model/          # Embedder trait, native potion loader, deterministic test embedder
+├── extract/        # Tree-sitter extraction coordinator (25 languages)
+├── scan.rs         # File walker (ignore crate, gitignore-aware)
+├── manifest.rs     # Generation manifest (model identity, dims, schema)
+├── boost.rs        # Code-aware ranking boosts
+├── output.rs       # Result formatting (default, json, no-content, files-only)
+├── tokenize.rs     # BM25 identifier splitting
+└── synonyms.rs     # Query synonym expansion
+bench/              # Corpus generator, scale/parity/eval harnesses, qrels, results
+src/                # Legacy v0.0.3 omendb-backed source (reference only, not built)
 ```
 
 ## Technology Stack
 
 | Component    | Version                  | Notes                                 |
 | ------------ | ------------------------ | ------------------------------------- |
-| Rust         | nightly-2025-12-04       | Required for omendb (portable_simd)   |
-| ort          | 2.0.0-rc.11              | ONNX Runtime inference                |
-| omendb       | 0.0.37                  | Multi-vector + BM25 hybrid search     |
-| tree-sitter  | 0.25                     | AST parsing (25 languages)            |
-| Embeddings   | LateOn-Code-edge INT8    | 17M params, 48d/token, ~17MB          |
+| Rust         | nightly-2025-12-04       | Pinned in rust-toolchain.toml         |
+| rusqlite     | bundled                  | SQLite catalog + FTS5 (no system dep) |
+| memmap2      | —                        | Vector sidecar mmap                   |
+| tokenizers / safetensors / half / hf-hub | —       | Native static-model loading (no ort)  |
+| tree-sitter  | 0.25–0.26                | AST parsing (25 languages)            |
+| Embeddings   | potion-code-16M-v2       | Static Model2Vec, 256-d, MIT          |
 
 ## Code Standards
 
@@ -111,6 +104,9 @@ Cargo.toml
 
 - `OG_AUTO_BUILD=1` — auto-build index on search if missing
 - Auto-update: search detects stale files and re-indexes before searching
+- Generations: builds publish atomically via CURRENT; incremental rebuilds re-embed changed files only; `og build --force` for full rebuilds
+- Model identity pins the vector space: query embedding always uses the manifest's model; model/schema change forces full rebuild
+- No MCP, no daemon; CLI + `--json` is the agent interface
 - Exit codes: 0 = match found, 1 = no match, 2 = error
 - File refs: `file#name` (by block name), `file:line` (by line number)
 - Output formats: default (colored), `--json`, `--no-content`, `-l` (files only)

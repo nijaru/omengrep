@@ -1,21 +1,20 @@
 # omengrep (og)
 
-Local semantic code search using embeddings and BM25.
+Local semantic code search: hybrid BM25 + static embeddings, single binary, no daemon.
 
 ```bash
-cargo install --path .
+cargo install --path crates/og
 og build ./src
 og "authentication flow" ./src
 ```
 
 ## What it does
 
-omengrep extracts functions, classes, and methods from source files using tree-sitter, then indexes each block with both embeddings and BM25 keywords. Queries match against both indexes, so searching "error handling" finds `errorHandler()` and `AppError` — not just comments containing those words.
+omengrep extracts functions, classes, and methods from source files using tree-sitter, then indexes each block with static embeddings plus BM25 keywords. Queries match against both indexes, so searching "error handling" finds `errorHandler()` and `AppError` — not just comments containing those words.
 
 ```bash
 $ og build ./src
-Found 69 files (0.0s)
-Indexed 801 blocks from 69 files (10.8s)
+Indexed 801 blocks from 69 files
 
 $ og "error handling" ./src
 src/cli/search.rs:42 function handle_search
@@ -38,14 +37,14 @@ Use grep/ripgrep for exact strings. Use omengrep when you want implementations, 
 
 ## Install
 
-Requires Rust nightly toolchain.
+Requires the pinned Rust nightly toolchain (`rust-toolchain.toml`).
 
 ```bash
 git clone https://github.com/nijaru/omengrep && cd omengrep
-cargo install --path .
+cargo install --path crates/og
 ```
 
-The embedding model (~17MB) downloads automatically on first use.
+The embedding model downloads automatically on first use and is cached for offline use.
 
 ## Usage
 
@@ -57,8 +56,9 @@ og file.rs:42                  # Find code similar to a specific line
 og outline [path]              # Show indexed block structure
 og context [path]              # Show ranked file/symbol context
 og status [path]               # Show index info
-og list [path]                 # List all indexes under path
 og clean [path]                # Delete index
+og model status                # Show embedding model status
+og model install               # Download the embedding model
 
 # Options
 og -n 5 "error handling" .     # Limit to 5 results
@@ -69,22 +69,44 @@ og -l "config" .               # List matching files only
 og -t py,js "api" .            # Filter by file type
 og --exclude "tests/*" "fn" .  # Exclude patterns
 og --code-only "handler" .     # Skip docs (md, txt, rst)
+og --no-semantic "handler" .   # BM25 + trigram only, no vectors
+og outline --skeleton .        # Full signatures without bodies
+og context -n 12 --symbols 5 . # Ranked files/symbols, token-budgeted
 ```
 
-Set `OG_AUTO_BUILD=1` to build the index automatically on first search.
+Set `OG_AUTO_BUILD=1` to build the index automatically on first search. Searching a changed tree auto-updates the index first.
+
+Exit codes: 0 = match found, 1 = no match, 2 = error.
 
 ## How it works
 
-omengrep uses tree-sitter to parse source files into AST blocks (functions, classes, methods), then builds two indexes per block:
+Tree-sitter parses source files into AST blocks (functions, classes, methods). Each block is indexed three ways:
 
-1. **Embedding index** — per-token embeddings from a ColBERT-style model ([LateOn-Code-edge](https://huggingface.co/answerdotai/LateOn-Code-edge), 17M params, INT8 ONNX). Stored as [MuVERA](https://arxiv.org/abs/2405.19504) compressed multi-vectors, searched with MaxSim reranking.
-2. **BM25 index** — keyword search with identifier-aware tokenization.
+1. **Embeddings** — static Model2Vec vectors ([potion-code-16M-v2](https://huggingface.co/minishlab/potion-code-16M-v2), 256-d), stored as fp16 rows in a memory-mapped sidecar and searched with an exact parallel scan.
+2. **BM25** — keyword search over identifier-split terms (SQLite FTS5), OR-matched so partial terms rank instead of filtering to zero.
+3. **Trigram** — substring identifier matching (FTS5 trigram index over block names).
 
-At search time, both indexes run in parallel and results merge by ID, keeping the higher score.
+At search time the channels fuse with RRF, then code-aware boosts (exact name, path, type) reorder. Everything runs locally on CPU; no server, no daemon.
 
-Runs locally on CPU.
+## Index format (`.og/`)
 
-Built on [omendb](https://github.com/nijaru/omendb).
+```text
+.og/
+├── CURRENT                  # pointer file: published generation name
+└── generations/
+    └── g-<hash>/            # content + model + schema hash
+        ├── catalog.sqlite   # files, blocks, block_fts, block_trigram
+        ├── vectors-000.bin  # fp16 rows at blocks.id positions
+        └── manifest.json    # model identity, dims, schema version
+```
+
+Builds publish atomically: a staging generation is completed, then `CURRENT` flips to it. Readers never see a partial index, and a killed build leaves the previous generation readable. Fingerprint diffing re-embeds only changed files on rebuild.
+
+**Upgrading from pre-0.1.0:** the index format changed completely (previously OmenDB-backed). Delete old `.og` directories or just run `og build` — the new core builds a fresh generation and leaves legacy files untouched.
+
+## Benchmarks
+
+Measured numbers live in [`bench/results/`](bench/results/) with methodology, environment, and raw-data notes (og-only, per project policy). Current gates: p99 575ms at 500k blocks, search RSS under 500 MB, identifier Recall@10 1.000 on the repo qrels.
 
 ## Supported languages
 
