@@ -11,9 +11,14 @@ ai/tmp/
 .og/
 bench/golden/.og/
 
-# Benchmark corpus
+# Benchmark corpus (generated)
 bench/corpus/
 bench/coir_work/
+bench/splade_v3/
+
+# Python
+.ruff_cache/
+__pycache__/
 
 # Git worktrees
 .worktrees/

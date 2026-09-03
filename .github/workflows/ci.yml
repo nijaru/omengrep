@@ -24,14 +24,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Check omendb dependency
-        run: |
-          if cargo metadata --format-version 1 \
-            | jq -e '.packages[] | select(.name == "omendb" and .source == null)' >/dev/null; then
-            echo "::error::omendb must resolve from crates.io in CI"
-            exit 1
-          fi
-
       - name: Check formatting
         run: cargo fmt --check
 

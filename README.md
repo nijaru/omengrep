@@ -14,15 +14,14 @@ omengrep extracts functions, classes, and methods from source files using tree-s
 
 ```bash
 $ og build ./src
-Indexed 801 blocks from 69 files
+Indexed 418 blocks from 62 files
 
 $ og "error handling" ./src
-src/cli/search.rs:42 function handle_search
-  pub fn handle_search(args: &SearchArgs) -> Result<()> {
+crates/og-core/src/search.rs:63 function run_similar
+  pub fn run_similar(ref_path: &str, line: Option<usize>, name: Option<&str>, k: usize) -> Result<Vec<SearchResult>> {
 
-src/types.rs:15 enum SearchError
-  pub enum SearchError {
-      IndexNotFound,
+crates/og-core/src/boost.rs:1 module boost
+  //! Code-aware ranking boosts: exact-name match, type match, path match.
 
 2 results (0.27s)
 ```

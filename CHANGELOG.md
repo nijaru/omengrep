@@ -90,7 +90,7 @@ them. Old `.og` indexes are not readable by 0.1.0 and vice versa.
 - `og outline <file|dir>` — show block structure (name, type, line) for indexed files without content. Reads manifest metadata directly, no embedder load. Supports `--json` output.
 - `--context/-C N` — configurable content preview lines (default 5). No width truncation; terminal wraps naturally.
 - `--regex/-e PATTERN` — post-search filter applied to content and block name.
-- BM25 synonym expansion (`src/synonyms.rs`) — ~120-entry vocabulary table expands query terms at search time (e.g., `auth` → `authenticate login session token`). No model or index rebuild required.
+- BM25 synonym expansion (`crates/og-core/src/synonyms.rs`) — ~120-entry vocabulary table expands query terms at search time (e.g., `auth` → `authenticate login session token`). No model or index rebuild required.
 
 ### Changed
 

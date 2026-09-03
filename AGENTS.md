@@ -60,7 +60,6 @@ crates/og-core/     # All product logic
 ├── tokenize.rs     # BM25 identifier splitting
 └── synonyms.rs     # Query synonym expansion
 bench/              # Corpus generator, scale/parity/eval harnesses, qrels, results
-src/                # Legacy v0.0.3 omendb-backed source (reference only, not built)
 ```
 
 ## Technology Stack
