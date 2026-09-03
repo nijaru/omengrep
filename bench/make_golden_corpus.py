@@ -8,7 +8,7 @@ golden_dir = Path("bench/golden")
 golden_dir.mkdir(parents=True, exist_ok=True)
 
 # Copy existing
-tests_golden = Path("tests/golden")
+tests_golden = Path("crates/og/tests/golden")
 for f in ["api_handlers.ts", "auth.py", "errors.rs", "server.go"]:
     src = tests_golden / f
     if src.exists():

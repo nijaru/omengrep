@@ -40,8 +40,10 @@ Requires the pinned Rust nightly toolchain (`rust-toolchain.toml`).
 
 ```bash
 git clone https://github.com/nijaru/omengrep && cd omengrep
-cargo install --path crates/og
+cargo install --path crates/og        # binary: og
 ```
+
+From crates.io (once published): `cargo install omengrep` — same `og` binary.
 
 The embedding model downloads automatically on first use and is cached for offline use.
 

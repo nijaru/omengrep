@@ -1,5 +1,5 @@
 [package]
-name = "og"
+name = "omengrep"
 description = "Semantic code search — hybrid BM25 + vectors on owned storage"
 version.workspace = true
 edition.workspace = true

@@ -6,7 +6,7 @@
 
 ```bash
 cargo build --release                 # Build
-cargo install --path crates/og       # Install binary
+cargo install --path crates/og       # Install binary (crates.io name: omengrep)
 og build ./src                        # Build index (required first)
 og "query" ./src                      # Semantic search (text query)
 og file.rs#func                       # Find similar code (by name)

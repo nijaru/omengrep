@@ -31,7 +31,9 @@ them. Old `.og` indexes are not readable by 0.1.0 and vice versa.
 - Vector sidecar rows are fp16 (halved scan RSS); BM25 runs on SQLite
   FTS5 with identifier-split terms (OR-matched) plus a trigram channel;
   channels fuse with RRF (k=60) then code-aware boosts.
-- Install path is now `cargo install --path crates/og` (workspace).
+- Install path is now `cargo install --path crates/og` (workspace); the
+  crates.io package is `omengrep` (the `og` package name belongs to another
+  crate), installing the same `og` binary.
 
 ### Removed
 

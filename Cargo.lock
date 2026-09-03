@@ -1442,21 +1442,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "og"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "clap",
- "og-core",
- "owo-colors",
- "predicates",
- "regex",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "og-core"
 version = "0.1.0"
 dependencies = [
@@ -1499,6 +1484,21 @@ dependencies = [
  "tree-sitter-typescript",
  "tree-sitter-yaml",
  "tree-sitter-zig",
+]
+
+[[package]]
+name = "omengrep"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "og-core",
+ "owo-colors",
+ "predicates",
+ "regex",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

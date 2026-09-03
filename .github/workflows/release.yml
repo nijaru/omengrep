@@ -186,17 +186,25 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          if OUTPUT=$(cargo publish 2>&1); then
-            echo "$OUTPUT"
-          else
-            STATUS=$?
-            echo "$OUTPUT"
-            if echo "$OUTPUT" | grep -q "already exists on crates.io"; then
-              echo "Version $VERSION already published to crates.io, skipping"
+          # Publish both workspace crates explicitly (root `cargo publish`
+          # alone fails since the rename to package `omengrep` + `og-core`).
+          # Order matters: og-core (dependency) before omengrep (binary).
+          publish() {
+            local crate=$1
+            if OUTPUT=$(cargo publish -p "$crate" 2>&1); then
+              echo "$OUTPUT"
             else
-              exit $STATUS
+              STATUS=$?
+              echo "$OUTPUT"
+              if echo "$OUTPUT" | grep -q "already exists on crates.io"; then
+                echo "Version $VERSION of $crate already published to crates.io, skipping"
+              else
+                exit $STATUS
+              fi
             fi
-          fi
+          }
+          publish og-core
+          publish omengrep
 
   # ============================================================================
   # STAGE 5: Update Homebrew tap
