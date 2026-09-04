@@ -77,7 +77,23 @@ fn status_shows_files_and_blocks() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Files"))
-        .stdout(predicate::str::contains("Blocks"));
+        .stdout(predicate::str::contains("Blocks"))
+        // staleness signal is present and truthful right after a build
+        .stdout(predicate::str::contains("Status:       up to date"));
+}
+
+#[test]
+fn status_reports_stale_after_change() {
+    let tmp = build_fixture_index();
+    std::fs::write(
+        tmp.path().join("late_file.py"),
+        "def late_helper():\n    pass\n",
+    )
+    .unwrap();
+    og().args(["status", tmp.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("stale"));
 }
 
 #[test]
