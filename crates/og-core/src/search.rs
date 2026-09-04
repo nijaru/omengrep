@@ -17,7 +17,7 @@ pub fn run_search(
     num_results: usize,
     with_semantic: bool,
     quiet: bool,
-) -> Result<Vec<SearchResult>> {
+) -> Result<(Vec<SearchResult>, bool)> {
     let start = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let (index_root, found) = index::find_index_root(&start);
     if !found {
@@ -39,7 +39,8 @@ pub fn run_search(
     }
 
     let idx = Index::open(&index_root)?;
-    let mut results = retrieve::search(&idx, query, num_results, with_semantic)?;
+    let (mut results, lexical_matched) =
+        retrieve::search_with_signal(&idx, query, num_results, with_semantic)?;
 
     // Scope results to the search path (index may cover an ancestor).
     let prefix = start
@@ -52,7 +53,7 @@ pub fn run_search(
         results.retain(|r| r.file.starts_with(&scope));
     }
 
-    Ok(results)
+    Ok((results, lexical_matched))
 }
 
 pub(crate) fn auto_build_enabled() -> bool {

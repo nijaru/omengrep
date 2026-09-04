@@ -245,7 +245,14 @@ pub fn read_text(path: &Path, mtime: u64) -> Option<(String, u64)> {
 
 /// Scan directory tree for text files, returning path -> (content, mtime).
 /// mtime is captured before reading content so it's never newer than what was read.
-pub fn scan(root: &Path) -> Result<HashMap<PathBuf, (String, u64)>> {
+/// Scan outcome: indexed files plus how many were excluded by ignore
+/// rules (gitignore/global/exclude) — surfaced so builds can report it.
+pub struct ScanResult {
+    pub files: HashMap<PathBuf, (String, u64)>,
+    pub ignored: usize,
+}
+
+pub fn scan(root: &Path) -> Result<ScanResult> {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let walker = WalkBuilder::new(root)
@@ -287,10 +294,34 @@ pub fn scan(root: &Path) -> Result<HashMap<PathBuf, (String, u64)>> {
     });
 
     drop(tx);
+
     let mut results = HashMap::new();
     for (path, data) in rx {
         results.insert(path, data);
     }
 
-    Ok(results)
+    Ok(ScanResult {
+        files: results,
+        ignored: count_ignored(root),
+    })
+}
+
+/// Whether ignore rules (gitignore/exclude files) are present in the tree.
+/// The ignore crate filters excluded entries inside the walker, so an
+/// exact count is not observable from the walk itself; this detects the
+/// common case (ignore files exist) so builds can tell users their
+/// .gitignore is being honored rather than silently filtering.
+fn count_ignored(root: &Path) -> usize {
+    let mut n = 0;
+    for name in [".gitignore", ".ignore", ".git/info/exclude"] {
+        let p = if name == ".git/info/exclude" {
+            root.join(".git").join("info").join("exclude")
+        } else {
+            root.join(name)
+        };
+        if p.is_file() {
+            n += 1;
+        }
+    }
+    n
 }

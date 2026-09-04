@@ -243,9 +243,18 @@ fn full_build(
     if !quiet {
         eprint!("Scanning files...");
     }
-    let files = scan::scan(root)?;
+    let scan::ScanResult { files, ignored } = scan::scan(root)?;
     if !quiet {
-        eprintln!("\rScanned {} files", files.len());
+        if ignored > 0 {
+            eprintln!(
+                "\rScanned {} files ({} ignore file{} in effect)",
+                files.len(),
+                ignored,
+                if ignored == 1 { "" } else { "s" }
+            );
+        } else {
+            eprintln!("\rScanned {} files", files.len());
+        }
     }
 
     let t0 = std::time::Instant::now();
@@ -272,6 +281,12 @@ fn full_build(
             stats.files,
             t0.elapsed().as_secs_f64()
         );
+        if stats.skipped > 0 {
+            eprintln!(
+                "  {} files yielded no blocks (below chunk minimum, or no constructs)",
+                stats.skipped
+            );
+        }
     }
     Ok((staging.to_path_buf(), stats, content_hash, dims))
 }
@@ -294,9 +309,18 @@ fn incremental_build(
     if !quiet {
         eprint!("Scanning files...");
     }
-    let files = scan::scan(root)?;
+    let scan::ScanResult { files, ignored } = scan::scan(root)?;
     if !quiet {
-        eprintln!("\rScanned {} files", files.len());
+        if ignored > 0 {
+            eprintln!(
+                "\rScanned {} files ({} ignore file{} in effect)",
+                files.len(),
+                ignored,
+                if ignored == 1 { "" } else { "s" }
+            );
+        } else {
+            eprintln!("\rScanned {} files", files.len());
+        }
     }
 
     // Diff: changed/new files need re-extraction + re-embed; deleted files
@@ -353,6 +377,12 @@ fn incremental_build(
     vec_writer.finish()?;
     let stats = stats_from_conn(&conn)?;
     let content_hash = compute_content_hash(&conn)?;
+    if !quiet && stats.skipped > 0 {
+        eprintln!(
+            "  {} files yielded no blocks (below chunk minimum, or no constructs)",
+            stats.skipped
+        );
+    }
     Ok((staging.to_path_buf(), stats, content_hash, embedder.dims()))
 }
 
@@ -402,6 +432,11 @@ fn embed_and_store(
                 for (rowid, v) in rowids.iter().zip(&embeddings) {
                     vec_writer.write_at(*rowid, v)?;
                 }
+                if blocks.is_empty() {
+                    // Parsed/visible but produced nothing (e.g. prose below
+                    // the minimum chunk size, or no extractable constructs).
+                    stats.skipped += 1;
+                }
                 stats.files += 1;
                 stats.blocks += blocks.len();
             }
@@ -417,6 +452,7 @@ fn stats_from_conn(conn: &rusqlite::Connection) -> Result<IndexStats> {
     Ok(IndexStats {
         files: catalog::count_files(conn)?,
         blocks: catalog::count_blocks(conn)?,
+        skipped: catalog::count_empty_files(conn)?,
         ..Default::default()
     })
 }

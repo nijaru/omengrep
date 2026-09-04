@@ -59,6 +59,19 @@ pub fn search(
     k: usize,
     with_semantic: bool,
 ) -> Result<Vec<SearchResult>> {
+    search_with_signal(index, query, k, with_semantic).map(|(r, _)| r)
+}
+
+/// Search result plus the channel-participation signal: when the lexical
+/// channels (BM25 + trigram) come up empty, hits are semantic-only noise
+/// candidates rather than keyword matches. The CLI surfaces this so a
+/// missed identifier looks different from a ranked hit.
+pub fn search_with_signal(
+    index: &Index,
+    query: &str,
+    k: usize,
+    with_semantic: bool,
+) -> Result<(Vec<SearchResult>, bool)> {
     // Query preparation (ported): identifier split + synonym expansion.
     let split = crate::tokenize::split_identifiers(query);
     let expanded = crate::synonyms::expand_query(&split);
@@ -71,13 +84,15 @@ pub fn search(
         Vec::new()
     };
 
+    let lexical_matched = !bm25_hits.is_empty() || !trigram_hits.is_empty();
+
     let channels: Vec<(f32, Channel)> =
         vec![(1.0, bm25_hits), (0.7, trigram_hits), (1.0, vector_hits)];
     let fused = rrf_fuse(&channels, k);
 
     let mut results = hydrate(&index.conn, fused)?;
     crate::boost::boost_results(&mut results, query);
-    Ok(results)
+    Ok((results, lexical_matched))
 }
 
 /// Similar-code search from a reference block: vector scan joined with

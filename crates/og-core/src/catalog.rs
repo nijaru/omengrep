@@ -141,6 +141,17 @@ pub fn count_blocks(conn: &Connection) -> Result<usize> {
     Ok(conn.query_row("SELECT COUNT(*) FROM blocks", [], |r| r.get::<_, i64>(0))? as usize)
 }
 
+/// Files present in the catalog with zero indexed blocks (extraction
+/// yielded nothing: below chunk minimum, no constructs).
+pub fn count_empty_files(conn: &Connection) -> Result<usize> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM files f WHERE NOT EXISTS (SELECT 1 FROM blocks b WHERE b.file = f.path)",
+        [],
+        |r| r.get(0),
+    )?;
+    Ok(n as usize)
+}
+
 pub fn count_files(conn: &Connection) -> Result<usize> {
     Ok(conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get::<_, i64>(0))? as usize)
 }

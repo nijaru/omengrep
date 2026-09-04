@@ -109,6 +109,9 @@ enum Command {
         /// Directory.
         #[arg(default_value = ".")]
         path: PathBuf,
+        /// Suppress the removal confirmation.
+        #[arg(short = 'q', long = "quiet")]
+        quiet: bool,
     },
     /// Show block structure of an indexed file.
     Outline {
@@ -209,7 +212,7 @@ pub fn run() -> anyhow::Result<()> {
             max_tokens,
             quiet,
         }),
-        Some(Command::Clean { path }) => clean::run(&path),
+        Some(Command::Clean { path, quiet }) => clean::run(&path, quiet),
         Some(Command::Model { action }) => match action {
             ModelAction::Status => model::status(),
             ModelAction::Install => model::install(),

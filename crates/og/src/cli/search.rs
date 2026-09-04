@@ -30,13 +30,27 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
         None => bail!("No query provided. Run 'og --help' for usage."),
     };
 
-    // File reference? -> similar-code search.
+    // File reference? -> similar-code search. Warn when the input is
+    // ambiguous: a plausible search query that also names a real file
+    // (e.g. `og auth.py` intending search) silently switches modes here.
+    // Path-with-marker refs (file#name, file:line) are unambiguous.
     if let Some(file_ref) = search::parse_file_reference(query) {
+        let ambiguous = matches!(&file_ref, FileRef::ByFile { .. })
+            && !query.contains('#')
+            && !query.contains(':')
+            && !params.quiet;
+        if ambiguous {
+            eprintln!(
+                "Note: '{}' is an existing file — running similar-code search. \
+                 For text search, quote it differently or pass a subdirectory path.",
+                query
+            );
+        }
         return run_similar(file_ref, params);
     }
 
     let t0 = Instant::now();
-    let mut results = search::run_search(
+    let (mut results, lexical_matched) = search::run_search(
         query,
         params.path,
         params.num_results,
@@ -50,6 +64,13 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
             eprintln!("No results found");
         }
         std::process::exit(EXIT_NO_MATCH);
+    }
+
+    // Distinguish 'ranked matches' from 'semantic-only candidates': when
+    // the lexical channels found nothing, these hits are vector-noise-range
+    // guesses — say so (stderr; JSON stays machine-clean).
+    if !lexical_matched && !params.quiet {
+        eprintln!("Note: no keyword matches; showing nearest semantic candidates only");
     }
 
     results = search::filter_results(results, params.file_types, params.exclude, params.code_only);
@@ -115,7 +136,26 @@ fn run_similar(file_ref: FileRef, params: &SearchParams<'_>) -> Result<()> {
 
     if results.is_empty() {
         if !matches!(params.format, OutputFormat::Json) {
-            eprintln!("No similar code found");
+            // A doc-only file (markdown/text blocks) is the common no-match
+            // case for similar-code: prose blocks sit below the similarity
+            // floor. Say which happened instead of a bare nothing.
+            let is_doc_only = std::path::Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|ext| {
+                    matches!(
+                        ext.to_ascii_lowercase().as_str(),
+                        "md" | "mdx" | "markdown" | "txt" | "rst"
+                    )
+                });
+            if is_doc_only {
+                eprintln!(
+                    "No similar code found — '{}' holds doc/text blocks, which are not eligible for similar-code search",
+                    path
+                );
+            } else {
+                eprintln!("No similar code found");
+            }
         }
         std::process::exit(EXIT_NO_MATCH);
     }
