@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 og-core = { workspace = true }
 anyhow = { workspace = true }
-clap = { workspace = true }
+usage = { workspace = true }
 owo-colors = { workspace = true }
 regex = { workspace = true }
 serde_json = { workspace = true }

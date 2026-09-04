@@ -13,7 +13,7 @@ homepage = "https://github.com/nijaru/omengrep"
 og-core = { path = "crates/og-core" }
 
 anyhow = "1"
-clap = { version = "4", features = ["derive"] }
+usage = { package = "usage-rs", version = "6" }
 owo-colors = "4"
 ignore = "0.4"
 rayon = "1"

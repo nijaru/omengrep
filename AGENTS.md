@@ -41,7 +41,7 @@ Index generations (.og/):
 ## Project Structure
 
 ```
-crates/og/          # CLI binary (clap): search, build, status, clean, outline, context, model
+crates/og/          # CLI binary (usage-rs): search, build, status, clean, outline, context, model
 crates/og-core/     # All product logic
 ├── lib.rs          # Re-exports
 ├── types.rs        # Block, SearchResult, FileRef

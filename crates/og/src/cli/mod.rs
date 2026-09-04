@@ -1,6 +1,6 @@
-//! og CLI: search, build, status, clean, outline, context. The embedder is
-//! the native static Model2Vec default (tk-7wp8); outline/context ported
-//! onto the catalog in tk-4z53.
+//! og CLI: search, build, status, clean, outline, context, model.
+//! usage-rs surface: one declaration drives parsing, help, dispatch,
+//! and the portable spec (docs/completions via usage-cli).
 
 pub mod build;
 pub mod clean;
@@ -12,234 +12,272 @@ pub mod status;
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use usage::{Args, Cli, Run, Subcommands};
 
-#[derive(Parser)]
-#[command(
-    name = "og",
-    about = "Semantic code search — hybrid BM25 + vectors",
-    version
-)]
-pub struct Cli {
-    #[command(subcommand)]
-    command: Option<Command>,
-
-    /// Search query or file reference (file#name, file:line).
-    #[arg(value_name = "QUERY")]
+/// Semantic code search — hybrid BM25 + vectors
+#[derive(Cli)]
+#[usage(bin = "og", version)]
+struct Og {
+    /// Search query or file reference (file#name, file:line)
     query: Option<String>,
 
-    /// Directory to search.
-    #[arg(value_name = "PATH", default_value = ".")]
+    /// Directory to search
+    #[usage(default = ".")]
     path: PathBuf,
 
-    /// Number of results.
-    #[arg(short = 'n', default_value = "10")]
+    /// Number of results
+    #[usage(short = 'n', default = "10")]
     num_results: usize,
 
-    /// JSON output.
-    #[arg(short = 'j', long = "json")]
+    /// JSON output
+    #[usage(short = 'j', long)]
     json: bool,
 
-    /// List files only.
-    #[arg(short = 'l', long = "files-only")]
+    /// List files only
+    #[usage(short = 'l', long)]
     files_only: bool,
 
-    /// JSON output without content field.
-    #[arg(long = "no-content")]
+    /// JSON output without content field
+    #[usage(long)]
     no_content: bool,
 
-    /// Suppress progress.
-    #[arg(short = 'q', long = "quiet")]
+    /// Suppress progress
+    #[usage(short = 'q', long)]
     quiet: bool,
 
-    /// Filter file types (py,js,ts).
-    #[arg(short = 't', long = "type")]
+    /// Filter file types (py,js,ts)
+    #[usage(short = 't', long, name = "type")]
     file_types: Option<String>,
 
-    /// Exclude glob patterns.
-    #[arg(long = "exclude")]
+    /// Exclude glob patterns
+    #[usage(long)]
     exclude: Vec<String>,
 
-    /// Exclude docs (md, txt, rst).
-    #[arg(long = "code-only")]
+    /// Exclude docs (md, txt, rst)
+    #[usage(long)]
     code_only: bool,
 
-    /// Disable the vector channel (BM25 + trigram only).
-    #[arg(long = "no-semantic")]
+    /// Disable the vector channel (BM25 + trigram only)
+    #[usage(long)]
     no_semantic: bool,
 
-    /// Content preview lines (0 = none).
-    #[arg(short = 'C', long = "context", default_value = "5")]
+    /// Content preview lines (0 = none)
+    #[usage(short = 'C', long, name = "context", default = "5")]
     context_lines: usize,
 
-    /// Filter results by regex (applied to content and name).
-    #[arg(short = 'e', long = "regex")]
+    /// Filter results by regex (applied to content and name)
+    #[usage(short = 'e', long)]
     regex: Option<String>,
 
-    /// Highlight query-related tokens in terminal previews.
-    #[arg(long = "highlight")]
+    /// Highlight query-related tokens in terminal previews
+    #[usage(long)]
     highlight: bool,
+
+    /// Subcommand to run
+    #[usage(subcommand)]
+    command: Option<Command>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommands)]
+#[usage(run)]
 enum Command {
-    /// Build or update index.
-    Build {
-        /// Directory to index.
-        #[arg(default_value = ".")]
-        path: PathBuf,
-        /// Use the deterministic test embedder (no model download; no semantic signal).
-        #[arg(long = "deterministic")]
-        deterministic: bool,
-        /// Force a full rebuild.
-        #[arg(short = 'f', long = "force")]
-        force: bool,
-        /// Suppress progress.
-        #[arg(short = 'q', long = "quiet")]
-        quiet: bool,
-    },
-    /// Show index status.
-    Status {
-        /// Directory to check.
-        #[arg(default_value = ".")]
-        path: PathBuf,
-    },
-    /// Delete index.
-    Clean {
-        /// Directory.
-        #[arg(default_value = ".")]
-        path: PathBuf,
-        /// Suppress the removal confirmation.
-        #[arg(short = 'q', long = "quiet")]
-        quiet: bool,
-    },
-    /// Show block structure of an indexed file.
-    Outline {
-        /// File or directory to outline.
-        #[arg(default_value = ".")]
-        path: PathBuf,
-        /// JSON output.
-        #[arg(short = 'j', long = "json")]
-        json: bool,
-        /// Output full function/class signatures without bodies.
-        #[arg(long = "skeleton")]
-        skeleton: bool,
-        /// Token budget for packed output (~4 chars/token).
-        #[arg(long = "max-tokens", default_value = "8000")]
-        max_tokens: usize,
-        /// Suppress progress.
-        #[arg(short = 'q', long = "quiet")]
-        quiet: bool,
-    },
-    /// Show ranked files and symbols for compact code context.
-    Context {
-        /// File or directory to summarize.
-        #[arg(default_value = ".")]
-        path: PathBuf,
-        /// Number of files to show.
-        #[arg(short = 'n', default_value = "12")]
-        num_files: usize,
-        /// Number of symbols per file.
-        #[arg(long = "symbols", default_value = "5")]
-        symbols_per_file: usize,
-        /// JSON output.
-        #[arg(short = 'j', long = "json")]
-        json: bool,
-        /// Include skeleton snippets.
-        #[arg(long = "skeleton")]
-        skeleton: bool,
-        /// Token budget for packed output (~4 chars/token).
-        #[arg(long = "max-tokens", default_value = "8000")]
-        max_tokens: usize,
-        /// Suppress progress.
-        #[arg(short = 'q', long = "quiet")]
-        quiet: bool,
-    },
-    /// Embedding model management.
-    Model {
-        #[command(subcommand)]
-        action: ModelAction,
-    },
+    /// Build or update index
+    Build(Build),
+    /// Show index status
+    Status(Status),
+    /// Delete index
+    Clean(Clean),
+    /// Show block structure of an indexed file
+    Outline(Outline),
+    /// Show ranked files and symbols for compact code context
+    Context(Context),
+    /// Embedding model management
+    Model(Model),
 }
 
-#[derive(Subcommand)]
+#[derive(Args)]
+struct Build {
+    /// Directory to index
+    #[usage(default = ".")]
+    path: PathBuf,
+    /// Use the deterministic test embedder (no model download; no semantic signal)
+    #[usage(long)]
+    deterministic: bool,
+    /// Force a full rebuild
+    #[usage(short = 'f', long)]
+    force: bool,
+    /// Suppress progress
+    #[usage(short = 'q', long)]
+    quiet: bool,
+}
+
+#[derive(Args)]
+struct Status {
+    /// Directory to check
+    #[usage(default = ".")]
+    path: PathBuf,
+}
+
+#[derive(Args)]
+struct Clean {
+    /// Directory
+    #[usage(default = ".")]
+    path: PathBuf,
+    /// Suppress the removal confirmation
+    #[usage(short = 'q', long)]
+    quiet: bool,
+}
+
+#[derive(Args)]
+struct Outline {
+    /// File or directory to outline
+    #[usage(default = ".")]
+    path: PathBuf,
+    /// JSON output
+    #[usage(short = 'j', long)]
+    json: bool,
+    /// Output full function/class signatures without bodies
+    #[usage(long)]
+    skeleton: bool,
+    /// Token budget for packed output (~4 chars/token)
+    #[usage(long, default = "8000")]
+    max_tokens: usize,
+    /// Suppress progress
+    #[usage(short = 'q', long)]
+    quiet: bool,
+}
+
+#[derive(Args)]
+struct Context {
+    /// File or directory to summarize
+    #[usage(default = ".")]
+    path: PathBuf,
+    /// Number of files to show
+    #[usage(short = 'n', default = "12")]
+    num_files: usize,
+    /// Number of symbols per file
+    #[usage(long, name = "symbols", default = "5")]
+    symbols_per_file: usize,
+    /// JSON output
+    #[usage(short = 'j', long)]
+    json: bool,
+    /// Include skeleton snippets
+    #[usage(long)]
+    skeleton: bool,
+    /// Token budget for packed output (~4 chars/token)
+    #[usage(long, default = "8000")]
+    max_tokens: usize,
+    /// Suppress progress
+    #[usage(short = 'q', long)]
+    quiet: bool,
+}
+
+#[derive(Args)]
+struct Model {
+    #[usage(subcommand)]
+    command: Option<ModelAction>,
+}
+
+#[derive(Subcommands)]
 enum ModelAction {
-    /// Show model status.
+    /// Show model status
     Status,
-    /// Download the default model.
+    /// Download the default model
     Install,
+}
+
+impl Run for Build {
+    type Output = anyhow::Result<()>;
+    fn run(self) -> Self::Output {
+        build::run(&self.path, self.deterministic, self.force, self.quiet)
+    }
+}
+
+impl Run for Status {
+    type Output = anyhow::Result<()>;
+    fn run(self) -> Self::Output {
+        status::run(&self.path)
+    }
+}
+
+impl Run for Clean {
+    type Output = anyhow::Result<()>;
+    fn run(self) -> Self::Output {
+        clean::run(&self.path, self.quiet)
+    }
+}
+
+impl Run for Outline {
+    type Output = anyhow::Result<()>;
+    fn run(self) -> Self::Output {
+        outline::run(&outline::OutlineParams {
+            path: &self.path,
+            json: self.json,
+            skeleton: self.skeleton,
+            max_tokens: self.max_tokens,
+            quiet: self.quiet,
+        })
+    }
+}
+
+impl Run for Context {
+    type Output = anyhow::Result<()>;
+    fn run(self) -> Self::Output {
+        context::run(&context::ContextParams {
+            path: &self.path,
+            num_files: self.num_files,
+            symbols_per_file: self.symbols_per_file,
+            json: self.json,
+            skeleton: self.skeleton,
+            max_tokens: self.max_tokens,
+            quiet: self.quiet,
+        })
+    }
+}
+
+impl Run for Model {
+    type Output = anyhow::Result<()>;
+    fn run(self) -> Self::Output {
+        match self.command {
+            Some(ModelAction::Status) => model::status(),
+            Some(ModelAction::Install) => model::install(),
+            None => model::status(),
+        }
+    }
 }
 
 /// Main CLI entry point.
 pub fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let cli = Og::parse();
 
     match cli.command {
-        Some(Command::Build {
-            path,
-            deterministic,
-            force,
-            quiet,
-        }) => build::run(&path, deterministic, force, quiet),
-        Some(Command::Status { path }) => status::run(&path),
-        Some(Command::Outline {
-            path,
-            json,
-            skeleton,
-            max_tokens,
-            quiet,
-        }) => outline::run(&outline::OutlineParams {
-            path: &path,
-            json,
-            skeleton,
-            max_tokens,
-            quiet,
-        }),
-        Some(Command::Context {
-            path,
-            num_files,
-            symbols_per_file,
-            json,
-            skeleton,
-            max_tokens,
-            quiet,
-        }) => context::run(&context::ContextParams {
-            path: &path,
-            num_files,
-            symbols_per_file,
-            json,
-            skeleton,
-            max_tokens,
-            quiet,
-        }),
-        Some(Command::Clean { path, quiet }) => clean::run(&path, quiet),
-        Some(Command::Model { action }) => match action {
-            ModelAction::Status => model::status(),
-            ModelAction::Install => model::install(),
+        Some(command) => command.run(),
+        // No subcommand: `og "query" [path]` is the default search
+        // surface; a completely bare `og` prints help.
+        None => match cli.query {
+            Some(query) => search::run(&search::SearchParams {
+                query: Some(query.as_str()),
+                path: &cli.path,
+                num_results: cli.num_results,
+                format: og_core::types::OutputFormat::from_flags(
+                    cli.json,
+                    cli.files_only,
+                    cli.no_content,
+                ),
+                quiet: cli.quiet,
+                file_types: cli.file_types.as_deref(),
+                exclude: &cli.exclude,
+                code_only: cli.code_only,
+                no_semantic: cli.no_semantic,
+                context_lines: cli.context_lines,
+                regex: cli.regex.as_deref(),
+                highlight: cli.highlight,
+            }),
+            None => {
+                let page = Og::render_help(Og::command(), false).unwrap_or_default();
+                print!("{page}");
+                Ok(())
+            }
         },
-        None if cli.query.is_none() => {
-            use clap::CommandFactory;
-            Cli::command().print_help()?;
-            println!();
-            Ok(())
-        }
-        None => search::run(&search::SearchParams {
-            query: cli.query.as_deref(),
-            path: &cli.path,
-            num_results: cli.num_results,
-            format: og_core::types::OutputFormat::from_flags(
-                cli.json,
-                cli.files_only,
-                cli.no_content,
-            ),
-            quiet: cli.quiet,
-            file_types: cli.file_types.as_deref(),
-            exclude: &cli.exclude,
-            code_only: cli.code_only,
-            no_semantic: cli.no_semantic,
-            context_lines: cli.context_lines,
-            regex: cli.regex.as_deref(),
-            highlight: cli.highlight,
-        }),
     }
 }
