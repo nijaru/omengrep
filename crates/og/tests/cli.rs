@@ -1,6 +1,6 @@
 //! og CLI integration tests. Ported from v0.0.3 tests/cli.rs (deleted with
 //! the legacy tree): same fixtures and regression intent, adapted to the
-//! 0.1.0 surface — deterministic builds (offline CI), generation layout,
+//! 0.0.4 surface — deterministic builds (offline CI), generation layout,
 //! 0/1/2 exit codes, `og <subcommand>` flag order.
 
 use std::path::{Path, PathBuf};
@@ -62,7 +62,7 @@ fn run_json(args: &[&str]) -> (Output, serde_json::Value) {
 #[test]
 fn build_creates_generation_layout() {
     let tmp = build_fixture_index();
-    // v0.0.3 asserted .og/manifest.json; 0.1.0 publishes generations.
+    // v0.0.3 asserted .og/manifest.json; 0.0.4 publishes generations.
     let current = std::fs::read_to_string(tmp.path().join(".og/CURRENT")).unwrap();
     let gen_dir = tmp.path().join(".og/generations").join(current.trim());
     assert!(gen_dir.join("manifest.json").exists(), "manifest missing");
@@ -198,7 +198,7 @@ fn search_no_content_strips_content() {
 #[test]
 fn search_gibberish_exits_1_with_valid_json() {
     let tmp = build_fixture_index();
-    // v0.0.3 MaxSim always returned candidates; 0.1.0 ranking gates noise
+    // v0.0.3 MaxSim always returned candidates; 0.0.4 ranking gates noise
     // (similarity floor), so gibberish is a clean no-match exit 1.
     let (out, parsed) = run_json(&[
         "--json",
@@ -263,7 +263,7 @@ fn camel_case_query_matches() {
 fn similar_search_by_name_uses_raw_score() {
     let tmp = build_fixture_index();
     // v0.0.3 regression: negative MaxSim printed as "-40099% similar".
-    // 0.1.0 shows raw fused scores.
+    // 0.0.4 shows raw fused scores.
     let file_ref = format!("{}#AppError", tmp.path().join("errors.rs").display());
     let out = og()
         .args(["-q", &file_ref, tmp.path().to_str().unwrap()])
@@ -424,7 +424,7 @@ fn markdown_long_section_indexes_all_chunks() {
     );
 }
 
-// --- outline / context JSON surfaces (new in 0.1.0, replacing v0.0.3 shapes) ---
+// --- outline / context JSON surfaces (new in 0.0.4, replacing v0.0.3 shapes) ---
 
 #[test]
 fn outline_json_shape() {

@@ -21,7 +21,7 @@ pub fn run(path: &Path, deterministic: bool, force: bool, quiet: bool) -> Result
     } else {
         index::Incremental::Auto
     };
-    // Legacy (pre-0.1.0 omendb) .og dirs carry no CURRENT pointer: the new
+    // Legacy (0.0.3-era omendb) .og dirs carry no CURRENT pointer: the new
     // core builds a fresh generation alongside them without touching their
     // files. Say so once, so the orphaned disk use is not a mystery.
     let root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());

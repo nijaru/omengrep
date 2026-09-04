@@ -103,7 +103,7 @@ At search time the channels fuse with RRF, then code-aware boosts (exact name, p
 
 Builds publish atomically: a staging generation is completed, then `CURRENT` flips to it. Readers never see a partial index, and a killed build leaves the previous generation readable. Fingerprint diffing re-embeds only changed files on rebuild.
 
-**Upgrading from pre-0.1.0:** the index format changed completely (previously OmenDB-backed). Delete old `.og` directories or just run `og build` — the new core builds a fresh generation and leaves legacy files untouched.
+**Upgrading from 0.0.3 or earlier:** the index format changed completely (previously OmenDB-backed). Delete old `.og` directories or just run `og build` — the new core builds a fresh generation and leaves legacy files untouched.
 
 ## Benchmarks
 

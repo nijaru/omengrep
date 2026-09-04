@@ -1347,7 +1347,7 @@ dependencies = [
 
 [[package]]
 name = "og-core"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "blake3",
@@ -1392,7 +1392,7 @@ dependencies = [
 
 [[package]]
 name = "omengrep"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "assert_cmd",

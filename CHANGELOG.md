@@ -1,11 +1,15 @@
 # Changelog
 
-## [0.1.0] - 2026-09-03
+## [0.0.4] - 2026-09-04
+
+Released on the 0.0.x line by intent: early development, bugs fixed as
+they surface; 0.1.0 is reserved for the first stability milestone rather
+than spent on the rewrite itself.
 
 Complete Rust rewrite on owned storage (no OmenDB, no ONNX runtime). The
 index format changed: delete old `.og` directories or run `og build`,
 which builds a fresh generation alongside legacy files without touching
-them. Old `.og` indexes are not readable by 0.1.0 and vice versa.
+them. Old `.og` indexes are not readable by 0.0.4 and vice versa.
 
 ### Added
 
