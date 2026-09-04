@@ -16,7 +16,10 @@ use usage::{Args, Cli, Run, Subcommands};
 
 /// Semantic code search — hybrid BM25 + vectors
 #[derive(Cli)]
-#[usage(bin = "og", version)]
+// unknown_flags = "error": clap parity — a mistyped flag must be a hard
+// error, not silently swallowed into the query positional (the default
+// "value" mode does that and a typo degrades into a nonsense search).
+#[usage(bin = "og", version, unknown_flags = "error")]
 struct Og {
     /// Search query or file reference (file#name, file:line)
     query: Option<String>,

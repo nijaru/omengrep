@@ -553,3 +553,43 @@ fn highlight_does_not_change_json_output() {
         "json output must not include ANSI styling; got: {stdout}"
     );
 }
+
+// --- invalid argv (usage-rs migration regression guards) ---
+
+#[test]
+fn unknown_flag_is_hard_error() {
+    // clap parity: a mistyped flag must exit 2, never silently degrade
+    // into the query positional (usage-rs default would swallow it).
+    let tmp = build_fixture_index();
+    og().args(["--bogus-flag"])
+        .current_dir(tmp.path())
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("unexpected argument"));
+}
+
+#[test]
+fn missing_flag_value_is_error() {
+    og().args(["--exclude"]).assert().code(2);
+}
+
+#[test]
+fn invalid_integer_value_is_error() {
+    og().args(["-n", "abc", "query"]).assert().code(2);
+}
+
+#[test]
+fn unknown_word_without_flags_is_a_search_not_error() {
+    // A bare word is a query (search-first CLI): no lexical/semantic
+    // match for a nonsense word is exit 1, not a subcommand error.
+    let tmp = build_fixture_index();
+    og().args([
+        "-q",
+        "--json",
+        "frobnicate_zzz",
+        tmp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .code(1);
+    // and the stdout is valid empty JSON
+}
