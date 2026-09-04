@@ -97,7 +97,12 @@ pub fn build_with(
     quiet: bool,
     mode: Incremental,
 ) -> Result<IndexStats> {
-    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    // Refuse to build against a nonexistent root: canonicalize() would
+    // silently fall back to the raw path and create_dir_all would mint
+    // the directory (plus an index inside it) from a typo.
+    let root = root
+        .canonicalize()
+        .with_context(|| format!("index root {} does not exist", root.display()))?;
     let og_dir = root.join(INDEX_DIR);
     std::fs::create_dir_all(og_dir.join("generations"))?;
 

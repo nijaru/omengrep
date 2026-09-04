@@ -593,3 +593,78 @@ fn unknown_word_without_flags_is_a_search_not_error() {
     .code(1);
     // and the stdout is valid empty JSON
 }
+
+// --- adversarial matrix (2026-09-04 post-usage-rs sweep) ---
+// The invalid-argv gap shipped a real bug once; these encode the whole
+// matrix that found it plus the build-root validation fix.
+
+#[test]
+fn build_nonexistent_root_is_error_not_silent_create() {
+    // Regression: build used to canonicalize-with-fallback and then
+    // create_dir_all, minting a directory + index from a typo'd path
+    // with exit 0.
+    let tmp = TempDir::new().unwrap();
+    let ghost = tmp.path().join("typo-dir");
+    og().args(["build", "-q", ghost.to_str().unwrap()])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("does not exist"));
+    assert!(!ghost.exists(), "build must not create the root directory");
+}
+
+#[test]
+fn build_file_as_root_is_error() {
+    let tmp = TempDir::new().unwrap();
+    let f = tmp.path().join("a.rs");
+    std::fs::write(&f, "fn a() {}\n").unwrap();
+    og().args(["build", "-q", f.to_str().unwrap()])
+        .assert()
+        .code(2);
+    assert!(!tmp.path().join("a.rs/.og").exists());
+}
+
+#[test]
+fn context_zero_truncation_says_what_happened() {
+    let tmp = build_fixture_index();
+    og().args(["context", "-n", "0", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("-n/--symbols is 0"));
+    og().args(["context", "--symbols", "0", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("-n/--symbols is 0"));
+}
+
+#[test]
+fn empty_query_emits_valid_empty_json() {
+    let tmp = build_fixture_index();
+    og().args(["--json", "-q", "", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(1)
+        .stdout("[]\n");
+}
+
+#[test]
+fn invalid_regex_is_error_not_panic() {
+    let tmp = build_fixture_index();
+    for bad in ["[", "(", "*start"] {
+        og().args(["-e", bad, "-q", "password", tmp.path().to_str().unwrap()])
+            .assert()
+            .code(2);
+    }
+}
+
+#[test]
+fn negative_preview_lines_is_usage_error() {
+    og().args(["-C", "-1", "q"]).assert().code(2);
+}
+
+#[test]
+fn unicode_query_is_handled() {
+    let tmp = build_fixture_index();
+    // No fixture carries café/naïve identifiers; expect clean no-match.
+    og().args(["-q", "--json", "café naïve", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(1);
+}

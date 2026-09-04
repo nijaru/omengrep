@@ -28,7 +28,11 @@ pub fn run(params: &ContextParams<'_>) -> Result<()> {
     )?;
 
     if ranked.is_empty() {
-        eprintln!("No indexed files under {}", params.path.display());
+        if params.num_files == 0 || params.symbols_per_file == 0 {
+            eprintln!("Nothing to show: -n/--symbols is 0 (no files or symbols requested)");
+        } else {
+            eprintln!("No indexed files under {}", params.path.display());
+        }
         std::process::exit(EXIT_ERROR);
     }
 

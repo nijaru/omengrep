@@ -60,7 +60,10 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
     let search_time = t0.elapsed();
 
     if results.is_empty() {
-        if !matches!(params.format, OutputFormat::Json) {
+        if matches!(params.format, OutputFormat::Json) {
+            // Machine consumers get a valid empty array, not zero bytes.
+            println!("[]");
+        } else {
             eprintln!("No results found");
         }
         std::process::exit(EXIT_NO_MATCH);
