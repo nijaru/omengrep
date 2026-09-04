@@ -9,8 +9,10 @@ use rusqlite::{Connection, params};
 use crate::types::Block;
 
 /// Catalog + sidecar storage schema version. Bump on incompatible changes.
-/// v2: vector sidecar rows are fp16 (was f32) — halves sidecar and scan RSS.
-pub const SCHEMA_VERSION: i64 = 2;
+/// (Set to 1 at first release: pre-release format iterations never shipped,
+/// so fp16 rows are simply v1. The version exists for future format
+/// changes — mismatch forces a full rebuild rather than a wrong read.)
+pub const SCHEMA_VERSION: i64 = 1;
 
 pub fn open(path: &Path) -> Result<Connection> {
     let conn =

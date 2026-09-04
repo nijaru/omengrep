@@ -21,15 +21,6 @@ pub fn run(path: &Path, deterministic: bool, force: bool, quiet: bool) -> Result
     } else {
         index::Incremental::Auto
     };
-    // Legacy (0.0.3-era omendb) .og dirs carry no CURRENT pointer: the new
-    // core builds a fresh generation alongside them without touching their
-    // files. Say so once, so the orphaned disk use is not a mystery.
-    let root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    if !quiet && root.join(".og").exists() && !root.join(".og").join("CURRENT").exists() {
-        eprintln!(
-            "No current-format index found; building fresh (legacy .og files are left untouched — delete .og to reclaim space)."
-        );
-    }
     let stats = index::build_with(path, embedder.as_ref(), quiet, mode)?;
     // index::build_with already printed the "Indexed N blocks ... (Xs)"
     // summary; only surface per-run extras here (never duplicate the line).
