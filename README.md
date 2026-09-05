@@ -56,7 +56,7 @@ og file.rs#func_name           # Find code similar to a named block
 og file.rs:42                  # Find code similar to a specific line
 og outline [path]              # Show indexed block structure
 og context [path]              # Show ranked file/symbol context
-og status [path]               # Show index info
+og status [path]               # Index health: freshness, size, corruption
 og clean [path]                # Delete index
 og model status                # Show embedding model status
 og model install               # Download the embedding model
@@ -78,6 +78,28 @@ og context -n 12 --symbols 5 . # Ranked files/symbols, token-budgeted
 Set `OG_AUTO_BUILD=1` to build the index automatically on first search. Searching a changed tree auto-updates the index first.
 
 Exit codes: 0 = match found, 1 = no match, 2 = error.
+
+### Shell completions
+
+`og` emits a [usage](https://usage.build) KDL spec consumable by
+[usage-cli](https://usage.build) shell completion:
+
+```bash
+og __usage_spec__ > /tmp/og.kdl
+usage g completion -s zsh /tmp/og.kdl   # also: bash, fish
+```
+
+### `og status`
+
+```
+Index root:    /path/to/repo
+Generation:   g-a992432d728b (2.8 MB)
+Status:       up to date        # or: stale / corrupt (with recovery hint)
+Files:         141
+Blocks:        941
+Model:         minishlab/potion-code-16M-v2@b06ea69c8c55@1879a46ba038
+Dimensions:    256
+```
 
 ## How it works
 

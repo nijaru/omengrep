@@ -54,6 +54,33 @@ them. Old `.og` indexes are not readable by 0.0.4 and vice versa.
   reader.
 - Cached models resolve without network revalidation (was ~2.4s per
   invocation).
+- `og build <nonexistent-path>` no longer silently creates the directory
+  plus an index inside it; missing/file roots are hard errors.
+- Corrupt-catalog recovery: incremental build falls back to a full
+  rebuild and replaces the corrupt generation; `og status` reports
+  `corrupt` with a recovery hint instead of `up to date` over garbage;
+  `build --force` no longer discards its fresh build when the
+  generation name collides with a corrupt one.
+- `og context -n 0` / `--symbols 0` say what happened instead of
+  reporting "No indexed files".
+- Empty-result `--json` output is a valid `[]` (was zero bytes of
+  stdout before exit 1).
+- Invalid regexes in `-e` and negative `-C` are usage errors (exit 2),
+  not panics; unknown flags are hard errors rather than silently
+  becoming the query (usage-rs derives were pinned to clap parity).
+
+### Changed (post-rewrite hardening)
+
+- CLI rebuilt on usage-rs: same flag surface (search-as-default, `-j`,
+  `-l`, `--no-content`, `--type`, `--symbols`, `-C`), now with
+  `og __usage_spec__` for shell completions via usage-cli, spec-driven
+  help, and a tested help tree.
+- `og status` reports staleness (`up to date` / `stale`) and generation
+  size, and no longer prints internal schema/vector-row counters that
+  read like inconsistencies.
+- Build output surfaces ignore-file counts, zero-block files, and a
+  note when results are semantic-only (lexical channels found nothing);
+  JSON output stays machine-clean.
 
 ## [0.0.3] - 2026-04-26
 
