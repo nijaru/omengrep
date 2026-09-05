@@ -684,3 +684,120 @@ fn unicode_query_is_handled() {
         .assert()
         .code(1);
 }
+
+// --- corruption recovery (2026-09-04 sweep: success-message-over-garbage) ---
+
+#[test]
+fn corrupt_catalog_incremental_build_recovers() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("t.rs"), "fn probe_a() {}\n").unwrap();
+    og().args(["build", "-q", tmp.path().to_str().unwrap()])
+        .assert()
+        .success();
+
+    // Corrupt the published catalog: raw garbage bytes in place.
+    let og_dir = tmp.path().join(".og");
+    let cur = std::fs::read_to_string(og_dir.join("CURRENT")).unwrap();
+    std::fs::write(
+        og_dir
+            .join("generations")
+            .join(cur.trim())
+            .join("catalog.sqlite"),
+        b"garbage bytes, not sqlite",
+    )
+    .unwrap();
+
+    // Incremental build must fall back to full rebuild AND replace the
+    // corrupt generation — the old collision branch re-pointed CURRENT at
+    // garbage while printing "Indexed N blocks".
+    og().args(["build", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "Rebuilding (previous generation unreadable)",
+        ))
+        .stderr(predicate::str::contains("Replacing corrupt generation"));
+    og().args(["-q", "-l", "probe_a", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(0)
+        .stdout("t.rs\n");
+}
+
+#[test]
+fn corrupt_catalog_status_reports_corrupt_not_healthy() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("t.rs"), "fn probe_b() {}\n").unwrap();
+    og().args(["build", "-q", tmp.path().to_str().unwrap()])
+        .assert()
+        .success();
+    let og_dir = tmp.path().join(".og");
+    let cur = std::fs::read_to_string(og_dir.join("CURRENT")).unwrap();
+    std::fs::write(
+        og_dir
+            .join("generations")
+            .join(cur.trim())
+            .join("catalog.sqlite"),
+        b"garbage bytes, not sqlite",
+    )
+    .unwrap();
+
+    // Status must open the catalog (not just the manifest) and say so.
+    og().args(["status", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(2)
+        .stdout(predicate::str::contains("Status:       corrupt"))
+        .stdout(predicate::str::contains("Recovery:     og build --force"));
+}
+
+#[test]
+fn corrupt_catalog_force_build_recovers() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("t.rs"), "fn probe_c() {}\n").unwrap();
+    og().args(["build", "-q", tmp.path().to_str().unwrap()])
+        .assert()
+        .success();
+    let og_dir = tmp.path().join(".og");
+    let cur = std::fs::read_to_string(og_dir.join("CURRENT")).unwrap();
+    std::fs::write(
+        og_dir
+            .join("generations")
+            .join(cur.trim())
+            .join("catalog.sqlite"),
+        b"garbage bytes, not sqlite",
+    )
+    .unwrap();
+
+    og().args(["build", "--force", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(0)
+        .stderr(predicate::str::contains("Replacing corrupt generation"));
+    og().args(["-q", "-l", "probe_c", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(0)
+        .stdout("t.rs\n");
+}
+
+// --- symlink behavior (2026-09-04 sweep: correct by probe, now pinned) ---
+
+#[test]
+fn symlinks_followed_once_no_double_indexing() {
+    let tmp = TempDir::new().unwrap();
+    let real = tmp.path().join("real");
+    std::fs::create_dir_all(&real).unwrap();
+    std::fs::write(real.join("t.rs"), "fn sym_probe() {}\n").unwrap();
+    // Two links to the same target: the scanner must not index it twice.
+    std::os::unix::fs::symlink("real", tmp.path().join("a")).unwrap();
+    std::os::unix::fs::symlink("real", tmp.path().join("b")).unwrap();
+
+    og().args(["build", "-q", tmp.path().to_str().unwrap()])
+        .assert()
+        .success();
+    og().args(["status", tmp.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Files:         1"));
+    og().args(["-q", "-l", "sym_probe", tmp.path().to_str().unwrap()])
+        .assert()
+        .code(0)
+        .stdout("real/t.rs\n");
+}

@@ -5,6 +5,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use og_core::index::{self, Index};
+use og_core::types::EXIT_ERROR;
 
 pub fn run(path: &Path) -> Result<()> {
     let start = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
@@ -14,15 +15,26 @@ pub fn run(path: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let idx = Index::open(&root)?;
+    // Open the full index (catalog + sidecar, not just the manifest):
+    // a corrupt catalog must be reported as corrupt, not as healthy.
+    let idx = match Index::open(&root) {
+        Ok(i) => i,
+        Err(e) => {
+            println!("Index root:    {}", root.display());
+            println!("Status:       corrupt ({e:#})");
+            println!("Recovery:     og build --force <root>");
+            std::process::exit(EXIT_ERROR);
+        }
+    };
     let m = &idx.manifest;
 
     // Staleness: the same check searches auto-applies. Status is where a
     // human inspects, so say whether the index is fresh.
-    let freshness = if index::needs_update(&root).unwrap_or(false) {
-        "stale (any search refreshes it, or run: og build)"
-    } else {
-        "up to date"
+    let freshness = match index::needs_update(&root) {
+        Ok(true) => "stale (any search refreshes it, or run: og build)",
+        Ok(false) => "up to date",
+        // A failed scan is a real condition, not 'fresh' — say so.
+        Err(_) => "unknown (scan failed)",
     };
 
     // Generation name is hash(content+model+schema); read CURRENT for

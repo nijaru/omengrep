@@ -28,6 +28,12 @@ pub fn open_readonly(path: &Path) -> Result<Connection> {
     let conn =
         Connection::open(path).with_context(|| format!("opening catalog {}", path.display()))?;
     conn.pragma_update(None, "query_only", "ON")?;
+    // SQLite defers reading the file until the first query: a corrupt
+    // catalog opens fine and only fails mid-read later. Force a trivial
+    // read now so every caller gets an immediate, contextual error (and
+    // health checks can trust is_ok()).
+    conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
+        .with_context(|| format!("catalog {} unreadable (corrupt?)", path.display()))?;
     Ok(conn)
 }
 

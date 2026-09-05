@@ -118,13 +118,17 @@ pub fn build_with(
         Manifest::read(&p)
     });
 
+    let prev_readable = prev
+        .as_ref()
+        .is_some_and(|g| generation_readable(&og_dir.join("generations").join(g)));
     let use_incremental = mode == Incremental::Auto
         && matches!(
             prev_manifest.as_ref(),
             Some(Ok(m)) if m.model_id == embedder.id()
                 && m.schema_version == catalog::SCHEMA_VERSION
                 && m.version == MANIFEST_VERSION
-        );
+        )
+        && prev_readable;
 
     let (staging, stats, content_hash, dims) = if use_incremental {
         let prev_gen = prev.clone().expect("checked above");
@@ -132,7 +136,12 @@ pub fn build_with(
         incremental_build(&root, &og_dir, &prev_dir, embedder, &staging, quiet)?
     } else {
         if !quiet && prev.is_some() {
-            eprintln!("Rebuilding (model or schema changed)");
+            let why = if !prev_readable {
+                "previous generation unreadable"
+            } else {
+                "model or schema changed"
+            };
+            eprintln!("Rebuilding ({why})");
         }
         full_build(&root, &og_dir, embedder, &staging, quiet)?
     };
@@ -167,10 +176,22 @@ pub fn build_with(
     let gen_hex = blake3::hash(name_input.as_bytes()).to_hex().to_string();
     let gen_name = format!("g-{}", &gen_hex[..12]);
     let final_dir = og_dir.join("generations").join(&gen_name);
-    if final_dir.exists() && final_dir != staging {
-        std::fs::remove_dir_all(&staging)?;
-    } else if final_dir != staging {
-        std::fs::rename(&staging, &final_dir)?;
+    if final_dir != staging {
+        // A readable existing generation with this name means identical
+        // content+model+schema already published: keep it, drop staging.
+        // An UNREADABLE one is corrupt (e.g. half-written): replace it,
+        // never re-point CURRENT at garbage.
+        if final_dir.exists() && generation_readable(&final_dir) {
+            std::fs::remove_dir_all(&staging)?;
+        } else {
+            if final_dir.exists() {
+                if !quiet {
+                    eprintln!("Replacing corrupt generation {gen_name}");
+                }
+                std::fs::remove_dir_all(&final_dir)?;
+            }
+            std::fs::rename(&staging, &final_dir)?;
+        }
     }
 
     // Publish: temp-write CURRENT + atomic rename.
@@ -502,6 +523,19 @@ fn compute_content_hash(conn: &rusqlite::Connection) -> Result<String> {
         hasher.update(format!("{f}\x1f{s}\x1f{m}\x1f{h}\n").as_bytes());
     }
     Ok(hasher.finalize().to_hex().to_string())
+}
+
+/// True when the generation's catalog and sidecar actually open. Manifest
+/// presence is not enough: a corrupt catalog passes a manifest-only check
+/// and every reader then fails with a raw SQLite error.
+fn generation_readable(gen_dir: &Path) -> bool {
+    let m = Manifest::read(&gen_dir.join("manifest.json"));
+    let m = match m {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    catalog::open_readonly(&gen_dir.join("catalog.sqlite")).is_ok()
+        && VectorStore::open(&gen_dir.join("vectors-000.bin"), m.dims).is_ok()
 }
 
 fn gc_generations(og_dir: &Path, keep: usize) -> Result<()> {
