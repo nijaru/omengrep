@@ -284,3 +284,67 @@ pub fn run() -> anyhow::Result<()> {
         },
     }
 }
+
+#[cfg(test)]
+mod spec_tests {
+    // Help-tree drift tests: the usage-rs migration's silent-failure
+    // category (renamed flags, swallowed unknown flags, moved help text)
+    // stays detectable. Pages come from usage's own renderer — no
+    // approximations. A diff here is a user-visible CLI change that
+    // belongs in the CHANGELOG; update the snapshot deliberately.
+    use super::Og;
+    use usage::test::{self, Outcome};
+
+    // The single drift surface: every command's long help, depth-first.
+    #[test]
+    fn help_tree_snapshot() {
+        let tree = test::help_tree(Og::spec(), test::Page::Long);
+        insta::assert_snapshot!(tree);
+    }
+
+    // Unknown flags stay errors (the usage-rs default was `value`:
+    // mistyped flags silently became the query positional).
+    #[test]
+    fn unknown_flag_is_error_not_query() {
+        let words = test::argv(["--nope", "query", "."]);
+        let outcome = test::outcome(Og::spec(), &words.words(), Og::parse_from);
+        let text = outcome.text().unwrap_or_default().to_string();
+        assert!(
+            matches!(outcome, Outcome::Failed(_)),
+            "unknown flag must be a hard error, got text: {text}"
+        );
+    }
+
+    // Long-flag spellings pinned where clap names differed from
+    // kebab-case (`--symbols`, `--type`) and dispatch stays intact.
+    #[test]
+    fn pinned_flag_spellings_parse() {
+        for words in [
+            vec!["-t", "py", "q", "."],
+            vec!["--type", "py", "q", "."],
+            vec!["context", "--symbols", "7", "."],
+            vec!["--no-semantic", "q", "."],
+            vec!["--no-content", "q", "."],
+            vec!["--code-only", "q", "."],
+            vec!["--highlight", "q", "."],
+            vec!["build", "--force", "."],
+            vec!["build", "--deterministic", "."],
+            vec!["-j", "q", "."],
+        ] {
+            let argv = test::argv(words.clone());
+            let outcome = test::outcome(Og::spec(), &argv.words(), Og::parse_from);
+            assert!(
+                matches!(outcome, Outcome::Parsed(_)),
+                "argv {words:?} must parse"
+            );
+        }
+    }
+
+    // Search-first surface: a bare word is a query, not an error.
+    #[test]
+    fn bare_word_is_query_not_error() {
+        let words = test::argv(["justaword", "."]);
+        let outcome = test::outcome(Og::spec(), &words.words(), Og::parse_from);
+        assert!(matches!(outcome, Outcome::Parsed(_)));
+    }
+}

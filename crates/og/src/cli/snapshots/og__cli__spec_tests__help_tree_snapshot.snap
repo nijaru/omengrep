@@ -1,0 +1,150 @@
+---
+source: crates/og/src/cli/mod.rs
+expression: tree
+---
+=== og ===
+og 0.0.4
+Semantic code search — hybrid BM25 + vectors
+
+Usage: og [FLAGS] [QUERY] [PATH] <SUBCOMMAND>
+
+Commands:
+  build    Build or update index
+  clean    Delete index
+  context  Show ranked files and symbols for compact code context
+  model    Embedding model management
+  outline  Show block structure of an indexed file
+  status   Show index status
+  help     Print this message or the help of the given subcommand(s)
+
+Arguments:
+  [QUERY]  Search query or file reference (file#name, file:line)
+  [PATH]   Directory to search
+           (default: .)
+
+Flags:
+  -n <NUM_RESULTS>         Number of results
+                           (default: 10)
+  -j, --json               JSON output
+  -l, --files-only         List files only
+      --no-content         JSON output without content field
+  -q, --quiet              Suppress progress
+  -t, --type <TYPE>        Filter file types (py,js,ts)
+      --exclude <EXCLUDE>  Exclude glob patterns
+      --code-only          Exclude docs (md, txt, rst)
+      --no-semantic        Disable the vector channel (BM25 + trigram only)
+  -C, --context <CONTEXT>  Content preview lines (0 = none)
+                           (default: 5)
+  -e, --regex <REGEX>      Filter results by regex (applied to content and name)
+      --highlight          Highlight query-related tokens in terminal previews
+  -h, --help               Print help
+  -V, --version            Print version
+
+=== og build ===
+Build or update index
+
+Usage: og build [FLAGS] [PATH]
+
+Arguments:
+  [PATH]  Directory to index
+          (default: .)
+
+Flags:
+      --deterministic  Use the deterministic test embedder (no model download;
+                       no semantic signal)
+  -f, --force          Force a full rebuild
+  -q, --quiet          Suppress progress
+  -h, --help           Print help
+
+=== og status ===
+Show index status
+
+Usage: og status [PATH]
+
+Arguments:
+  [PATH]  Directory to check
+          (default: .)
+
+Flags:
+  -h, --help  Print help
+
+=== og clean ===
+Delete index
+
+Usage: og clean [-q --quiet] [PATH]
+
+Arguments:
+  [PATH]  Directory
+          (default: .)
+
+Flags:
+  -q, --quiet  Suppress the removal confirmation
+  -h, --help   Print help
+
+=== og outline ===
+Show block structure of an indexed file
+
+Usage: og outline [FLAGS] [PATH]
+
+Arguments:
+  [PATH]  File or directory to outline
+          (default: .)
+
+Flags:
+  -j, --json                     JSON output
+      --skeleton                 Output full function/class signatures without
+                                 bodies
+      --max-tokens <MAX_TOKENS>  Token budget for packed output (~4 chars/token)
+                                 (default: 8000)
+  -q, --quiet                    Suppress progress
+  -h, --help                     Print help
+
+=== og context ===
+Show ranked files and symbols for compact code context
+
+Usage: og context [FLAGS] [PATH]
+
+Arguments:
+  [PATH]  File or directory to summarize
+          (default: .)
+
+Flags:
+  -n <NUM_FILES>                 Number of files to show
+                                 (default: 12)
+      --symbols <SYMBOLS>        Number of symbols per file
+                                 (default: 5)
+  -j, --json                     JSON output
+      --skeleton                 Include skeleton snippets
+      --max-tokens <MAX_TOKENS>  Token budget for packed output (~4 chars/token)
+                                 (default: 8000)
+  -q, --quiet                    Suppress progress
+  -h, --help                     Print help
+
+=== og model ===
+Embedding model management
+
+Usage: og model <SUBCOMMAND>
+
+Commands:
+  install  Download the default model
+  status   Show model status
+  help     Print this message or the help of the given subcommand(s)
+
+Flags:
+  -h, --help  Print help
+
+=== og model status ===
+Show model status
+
+Usage: og model status
+
+Flags:
+  -h, --help  Print help
+
+=== og model install ===
+Download the default model
+
+Usage: og model install
+
+Flags:
+  -h, --help  Print help
