@@ -691,9 +691,14 @@ fn unicode_query_is_handled() {
 fn corrupt_catalog_incremental_build_recovers() {
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("t.rs"), "fn probe_a() {}\n").unwrap();
-    og().args(["build", "-q", tmp.path().to_str().unwrap()])
-        .assert()
-        .success();
+    og().args([
+        "build",
+        "--deterministic",
+        "-q",
+        tmp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .success();
 
     // Corrupt the published catalog: raw garbage bytes in place.
     let og_dir = tmp.path().join(".og");
@@ -710,7 +715,7 @@ fn corrupt_catalog_incremental_build_recovers() {
     // Incremental build must fall back to full rebuild AND replace the
     // corrupt generation — the old collision branch re-pointed CURRENT at
     // garbage while printing "Indexed N blocks".
-    og().args(["build", tmp.path().to_str().unwrap()])
+    og().args(["build", "--deterministic", tmp.path().to_str().unwrap()])
         .assert()
         .code(0)
         .stderr(predicate::str::contains(
@@ -727,9 +732,14 @@ fn corrupt_catalog_incremental_build_recovers() {
 fn corrupt_catalog_status_reports_corrupt_not_healthy() {
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("t.rs"), "fn probe_b() {}\n").unwrap();
-    og().args(["build", "-q", tmp.path().to_str().unwrap()])
-        .assert()
-        .success();
+    og().args([
+        "build",
+        "--deterministic",
+        "-q",
+        tmp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .success();
     let og_dir = tmp.path().join(".og");
     let cur = std::fs::read_to_string(og_dir.join("CURRENT")).unwrap();
     std::fs::write(
@@ -753,9 +763,14 @@ fn corrupt_catalog_status_reports_corrupt_not_healthy() {
 fn corrupt_catalog_force_build_recovers() {
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("t.rs"), "fn probe_c() {}\n").unwrap();
-    og().args(["build", "-q", tmp.path().to_str().unwrap()])
-        .assert()
-        .success();
+    og().args([
+        "build",
+        "--deterministic",
+        "-q",
+        tmp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .success();
     let og_dir = tmp.path().join(".og");
     let cur = std::fs::read_to_string(og_dir.join("CURRENT")).unwrap();
     std::fs::write(
@@ -767,10 +782,15 @@ fn corrupt_catalog_force_build_recovers() {
     )
     .unwrap();
 
-    og().args(["build", "--force", tmp.path().to_str().unwrap()])
-        .assert()
-        .code(0)
-        .stderr(predicate::str::contains("Replacing corrupt generation"));
+    og().args([
+        "build",
+        "--force",
+        "--deterministic",
+        tmp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .code(0)
+    .stderr(predicate::str::contains("Replacing corrupt generation"));
     og().args(["-q", "-l", "probe_c", tmp.path().to_str().unwrap()])
         .assert()
         .code(0)
@@ -789,9 +809,14 @@ fn symlinks_followed_once_no_double_indexing() {
     std::os::unix::fs::symlink("real", tmp.path().join("a")).unwrap();
     std::os::unix::fs::symlink("real", tmp.path().join("b")).unwrap();
 
-    og().args(["build", "-q", tmp.path().to_str().unwrap()])
-        .assert()
-        .success();
+    og().args([
+        "build",
+        "--deterministic",
+        "-q",
+        tmp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .success();
     og().args(["status", tmp.path().to_str().unwrap()])
         .assert()
         .success()
