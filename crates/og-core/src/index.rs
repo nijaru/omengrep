@@ -130,7 +130,7 @@ pub fn build_with(
         )
         && prev_readable;
 
-    let (staging, stats, content_hash, dims) = if use_incremental {
+    let (new_staging, stats, content_hash, dims) = if use_incremental {
         let prev_gen = prev.clone().expect("checked above");
         let prev_dir = og_dir.join("generations").join(&prev_gen);
         incremental_build(&root, &og_dir, &prev_dir, embedder, &staging, quiet)?
@@ -144,6 +144,12 @@ pub fn build_with(
             eprintln!("Rebuilding ({why})");
         }
         full_build(&root, &og_dir, embedder, &staging, quiet)?
+    };
+    // Incremental no-op returns None: the current generation already
+    // matches the tree; skip manifest write, publish, and gc entirely.
+    let staging = match new_staging {
+        Some(dir) => dir,
+        None => return Ok(stats),
     };
 
     let manifest = Manifest {
@@ -164,6 +170,8 @@ pub fn build_with(
     // Manifest is written inside staging BEFORE the rename: the published
     // generation is complete and immutable the moment CURRENT flips.
     manifest.write(&staging.join("manifest.json"))?;
+
+    // Generation name derives from content + model identity + storage
 
     // Generation name derives from content + model identity + storage
     // schema: any of the three changing must publish a new directory, or a
@@ -264,7 +272,7 @@ fn full_build(
     embedder: &dyn Embedder,
     staging: &Path,
     quiet: bool,
-) -> Result<(PathBuf, IndexStats, String, usize)> {
+) -> Result<(Option<PathBuf>, IndexStats, String, usize)> {
     std::fs::create_dir_all(staging)?;
     if !quiet {
         eprint!("Scanning files...");
@@ -314,7 +322,7 @@ fn full_build(
             );
         }
     }
-    Ok((staging.to_path_buf(), stats, content_hash, dims))
+    Ok((Some(staging.to_path_buf()), stats, content_hash, dims))
 }
 
 fn incremental_build(
@@ -324,13 +332,12 @@ fn incremental_build(
     embedder: &dyn Embedder,
     staging: &Path,
     quiet: bool,
-) -> Result<(PathBuf, IndexStats, String, usize)> {
-    // Copy the previous generation as the staging base (immutable source).
-    copy_dir(prev_dir, staging)?;
-
-    let conn = catalog::open(&staging.join("catalog.sqlite"))?;
-    // Reuse one connection for all file updates; WAL on the copy only.
-    let prev_fingerprints = catalog::file_fingerprints(&conn)?;
+) -> Result<(Option<PathBuf>, IndexStats, String, usize)> {
+    // Diff against the PREVIOUS catalog (readonly) before copying: when
+    // nothing changed, skip the generation copy and republish entirely —
+    // the published generation is already current.
+    let prev_conn = catalog::open_readonly(&prev_dir.join("catalog.sqlite"))?;
+    let prev_fingerprints = catalog::file_fingerprints(&prev_conn)?;
 
     if !quiet {
         eprint!("Scanning files...");
@@ -374,6 +381,10 @@ fn incremental_build(
         if !quiet {
             eprintln!("Index up to date");
         }
+        // Signal no-op to the caller: the current generation is already
+        // correct; nothing should be copied, written, or republished.
+        let stats = stats_from_conn(&prev_conn)?;
+        return Ok((None, stats, String::new(), embedder.dims()));
     } else if !quiet {
         eprintln!(
             "Updating {} changed, {} removed",
@@ -382,7 +393,13 @@ fn incremental_build(
         );
     }
 
+    // Real changes: copy the previous generation as the staging base
+    // (immutable source), then edit the copy.
+    drop(prev_conn);
+    copy_dir(prev_dir, staging)?;
+
     // Deletions: remove catalog rows + zero vector rows.
+    let conn = catalog::open(&staging.join("catalog.sqlite"))?;
     let mut vec_writer =
         VectorWriter::open_existing(&staging.join("vectors-000.bin"), embedder.dims())?;
     let mut deleted_rowids: Vec<i64> = Vec::new();
@@ -409,7 +426,12 @@ fn incremental_build(
             stats.skipped
         );
     }
-    Ok((staging.to_path_buf(), stats, content_hash, embedder.dims()))
+    Ok((
+        Some(staging.to_path_buf()),
+        stats,
+        content_hash,
+        embedder.dims(),
+    ))
 }
 
 /// Per-file extraction result: (rel_path, content_hash, size, mtime, blocks).

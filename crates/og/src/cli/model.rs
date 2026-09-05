@@ -6,8 +6,12 @@ use og_core::model::Embedder as _;
 use og_core::model::potion;
 
 pub fn status() -> Result<()> {
-    match potion::PotionEmbedder::load_default() {
-        Ok(p) => {
+    // Status is a read-only probe: it must never download. Presence is a
+    // local cache check; the full load (for dims/vocab) only happens when
+    // the files are already on disk.
+    match potion::default_model_cached() {
+        Some(_) => {
+            let p = potion::PotionEmbedder::load_default()?;
             println!(
                 "default: {} (dims {}, vocab {})",
                 p.id(),
@@ -16,9 +20,9 @@ pub fn status() -> Result<()> {
             );
             println!("status:  installed");
         }
-        Err(e) => {
+        None => {
             println!("default: {} (dims 256)", potion::DEFAULT_REPO);
-            println!("status:  not installed ({e:#})");
+            println!("status:  not installed");
             println!("run 'og model install' to download (~33 MB)");
         }
     }

@@ -214,6 +214,25 @@ fn median(sorted: &mut [usize]) -> usize {
     sorted[sorted.len() / 2]
 }
 
+/// Local-only presence check for the default model snapshot: no network,
+/// no download. `og model status` must not fetch anything.
+pub fn default_model_cached() -> Option<PathBuf> {
+    use hf_hub::Cache;
+
+    let cache = Cache::from_env();
+    let cache_repo = cache.repo(hf_hub::Repo::new(
+        DEFAULT_REPO.to_string(),
+        hf_hub::RepoType::Model,
+    ));
+    let names = ["model.safetensors", "tokenizer.json", "config.json"];
+    let cached: Vec<PathBuf> = names.iter().filter_map(|n| cache_repo.get(n)).collect();
+    if cached.len() == names.len() {
+        cached[0].parent().map(Path::to_path_buf)
+    } else {
+        None
+    }
+}
+
 /// Download (or resolve from cache) the default potion model.
 ///
 /// Latency gate (tk-1i9o): every CLI invocation resolves the model, so a
@@ -221,13 +240,27 @@ fn median(sorted: &mut [usize]) -> usize {
 /// cache lookup; `Repo::download` revalidates against the server (~2.4s
 /// for 3 files) and is only used on a true cache miss (first install).
 fn download_default_model() -> Result<PathBuf> {
-    use hf_hub::api::sync::Api;
+    use hf_hub::Cache;
+    use hf_hub::api::sync::ApiBuilder;
 
-    let api = Api::new().context("creating HF API client (offline?)")?;
+    // Cache::from_env honors HF_HOME (the standard relocation env var);
+    // Api::new() would hardcode ~/.cache/huggingface/hub and silently
+    // re-download the model for anyone who moved their cache.
+    let api = ApiBuilder::from_cache(Cache::from_env())
+        .build()
+        .context("creating HF API client (offline?)")?;
     let repo = api.model(DEFAULT_REPO.to_string());
     let names = ["model.safetensors", "tokenizer.json", "config.json"];
 
-    let cached: Vec<PathBuf> = names.iter().filter_map(|n| repo.get(n).ok()).collect();
+    // LOCAL-ONLY cache probe: Repo::get() downloads on miss, which would
+    // silently fetch the model here — exactly the invisible pause this
+    // function exists to announce. Cache::repo().get() reads disk only.
+    let cache = Cache::from_env();
+    let cache_repo = cache.repo(hf_hub::Repo::new(
+        DEFAULT_REPO.to_string(),
+        hf_hub::RepoType::Model,
+    ));
+    let cached: Vec<PathBuf> = names.iter().filter_map(|n| cache_repo.get(n)).collect();
     if cached.len() == names.len() {
         return cached[0]
             .parent()
@@ -235,10 +268,19 @@ fn download_default_model() -> Result<PathBuf> {
             .context("snapshot dir");
     }
 
+    // True cache miss: announce the download so the first-use pause is
+    // legible instead of a silent multi-second hang mid-build.
+    eprintln!(
+        "Downloading embedding model {DEFAULT_REPO} (~33 MB, first use) to {}",
+        Cache::from_env().path().display()
+    );
     let mut files = Vec::new();
     for name in names {
-        let path = repo.download(name).with_context(|| {
-            format!("downloading {name} from {DEFAULT_REPO} (run 'og model install' with network)")
+        let path = repo.download(name).map_err(|e| {
+            anyhow!(
+                "downloading {name} from {DEFAULT_REPO}: {e}
+                 check network, or set HF_HOME to a cache that holds the model                  (run 'og model install' with network to prefetch)"
+            )
         })?;
         files.push(path);
     }

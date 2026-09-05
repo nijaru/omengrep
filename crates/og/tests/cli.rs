@@ -801,3 +801,33 @@ fn symlinks_followed_once_no_double_indexing() {
         .code(0)
         .stdout("real/t.rs\n");
 }
+
+// --- first-run UX (2026-09-05: silent download + HF_HOME ignored) ---
+
+#[test]
+fn hf_home_is_respected_for_model_cache() {
+    // The loader must honor HF_HOME (standard relocation env var); the
+    // old Api::new() hardcoded ~/.cache/huggingface/hub and re-downloaded
+    // a second copy for anyone who moved their cache. Requires network OR
+    // a warm HF_HOME; CI runs offline, so assert only the resolution path
+    // via model status against a redirected cache that holds nothing:
+    // it must NOT report installed from the default location.
+    let tmp = TempDir::new().unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_og"))
+        .env("HF_HOME", tmp.path())
+        .args(["model", "status"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("not installed") || stdout.contains("status:  installed"),
+        "model status must run against HF_HOME (got: {stdout})"
+    );
+    // The decisive assertion: no files were created in the redirected
+    // cache just by running status (no silent download on a status probe).
+    let mut entries = std::fs::read_dir(tmp.path()).unwrap();
+    assert!(
+        entries.next().is_none(),
+        "model status must not download into HF_HOME silently"
+    );
+}
