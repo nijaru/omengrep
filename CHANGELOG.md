@@ -68,6 +68,12 @@ them. Old `.og` indexes are not readable by 0.0.4 and vice versa.
 - Invalid regexes in `-e` and negative `-C` are usage errors (exit 2),
   not panics; unknown flags are hard errors rather than silently
   becoming the query (usage-rs derives were pinned to clap parity).
+- First-run model flow: `HF_HOME` is respected (relocated caches are
+  used instead of re-downloading a second copy), the ~33 MB first-use
+  download is announced before it starts (was a silent multi-second
+  pause mid-build), offline failures name the remedy instead of the
+  raw io error, and `og model status` is read-only — it no longer
+  downloads the model just to print "installed".
 
 ### Changed (post-rewrite hardening)
 
@@ -81,6 +87,10 @@ them. Old `.og` indexes are not readable by 0.0.4 and vice versa.
 - Build output surfaces ignore-file counts, zero-block files, and a
   note when results are semantic-only (lexical channels found nothing);
   JSON output stays machine-clean.
+- No-op rebuilds skip the generation copy and republish entirely
+  (diff happens against the previous catalog first): ~80ms → ~70ms on
+  this repo, and nothing mutates a published generation when the tree
+  is unchanged.
 
 ## [0.0.3] - 2026-04-26
 

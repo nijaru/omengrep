@@ -45,7 +45,7 @@ cargo install --path crates/og        # binary: og
 
 From crates.io (once published): `cargo install omengrep` — same `og` binary.
 
-The embedding model downloads automatically on first use and is cached for offline use.
+The embedding model (~33 MB) downloads automatically on first use — announced before it starts — and is cached for offline use. The cache honors `HF_HOME`; `og model status` is read-only, `og model install` prefetches.
 
 ## Usage
 
