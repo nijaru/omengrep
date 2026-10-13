@@ -16,7 +16,7 @@ og context ./src                      # Ranked file/symbol context
 cargo test                            # Run tests
 ```
 
-## Architecture
+## Current Architecture
 
 ```
 Build:  Scan (ignore crate) -> Extract (tree-sitter, 25 langs) -> Embed (potion static Model2Vec, native loader) -> Catalog (SQLite FTS5) + Vectors (mmap fp16 sidecar)
@@ -105,18 +105,15 @@ bench/              # Corpus generator, scale/parity/eval harnesses, qrels, resu
 - Auto-update: search detects stale files and re-indexes before searching
 - Generations: builds publish atomically via CURRENT; incremental rebuilds re-embed changed files only; `og build --force` for full rebuilds
 - Model identity pins the vector space: query embedding always uses the manifest's model; model/schema change forces full rebuild
-- No MCP, no daemon; CLI + `--json` is the agent interface
+- Current interface: CLI + `--json`; no MCP or daemon is implemented
 - Exit codes: 0 = match found, 1 = no match, 2 = error
 - File refs: `file#name` (by block name), `file:line` (by line number)
 - Output formats: default (colored), `--json`, `--no-content`, `-l` (files only)
 - `--highlight` colors query-related tokens in terminal previews only; JSON and files-only output stay unstyled.
 
-## AI Context
+## Historical Context
 
-**Read order:** `ai/brief.md` -> `ai/decisions.md` -> `ai/architecture.md`
-
-| File              | Purpose                          |
-| ----------------- | -------------------------------- |
-| `ai/brief.md`     | Active task, direction, next step |
-| `ai/decisions.md` | Architectural decisions          |
-| `ai/architecture.md` | System design and components  |
+`ai/` is a local symlink to legacy records, not maintained project documentation.
+Those records preserve past designs and experiments; they are not current
+instructions or constraints on future designs. Reconcile implementation claims
+with current source.
