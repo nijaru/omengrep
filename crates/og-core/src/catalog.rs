@@ -90,27 +90,6 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn set_meta(conn: &Connection, key: &str, value: &str) -> Result<()> {
-    conn.execute(
-        "INSERT OR REPLACE INTO meta(key, value) VALUES (?1, ?2)",
-        params![key, value],
-    )?;
-    Ok(())
-}
-
-pub fn get_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
-    let row = conn.query_row(
-        "SELECT value FROM meta WHERE key = ?1",
-        params![key],
-        |row| row.get::<_, String>(0),
-    );
-    match row {
-        Ok(v) => Ok(Some(v)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
-}
-
 /// Path -> (size, mtime) for every indexed file (incremental diff input).
 pub fn file_fingerprints(
     conn: &Connection,

@@ -31,8 +31,7 @@ fn incremental_updates_keep_vector_rows_aligned() {
     std::fs::create_dir_all(&src).unwrap();
 
     write(&src.join("a.rs"), "fn alpha() {}\n");
-    write(&src.join("b.rs"), "fn beta() {}\n"); // b gets the highest rowids
-    write(&src.join("c.rs"), "fn gamma() {}\n");
+    write(&src.join("b.rs"), "fn beta() {}\n"); // b gets the highest rowid
     build(root);
 
     // Modify the file holding the max rowid: delete frees its rowid, and
@@ -156,6 +155,49 @@ fn staging_leftovers_are_cleaned_on_next_build() {
         "staging must be cleared by the next build"
     );
     assert!(Index::open(root).is_ok(), "index remains readable");
+}
+
+#[test]
+fn rebuild_only_embeds_changed_sources() {
+    #[derive(Default)]
+    struct CountingEmbedder {
+        inner: DeterministicEmbedder,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl Embedder for CountingEmbedder {
+        fn id(&self) -> &str {
+            self.inner.id()
+        }
+        fn dims(&self) -> usize {
+            self.inner.dims()
+        }
+        fn embed(&self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
+            self.calls
+                .fetch_add(texts.len(), std::sync::atomic::Ordering::Relaxed);
+            self.inner.embed(texts)
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    write(&root.join("a.rs"), "fn first() {}\n");
+    write(&root.join("b.rs"), "fn second() {}\n");
+
+    let mut model = CountingEmbedder::default();
+    index::build(root, &model, true).unwrap();
+    assert_eq!(*model.calls.get_mut(), 2);
+    let original = index_dir_generation(root);
+
+    *model.calls.get_mut() = 0;
+    index::build(root, &model, true).unwrap();
+    assert_eq!(*model.calls.get_mut(), 0);
+    assert_eq!(index_dir_generation(root), original);
+
+    write(&root.join("a.rs"), "fn first_revised() {}\n");
+    index::build(root, &model, true).unwrap();
+    assert_eq!(*model.calls.get_mut(), 1);
+    assert_ne!(index_dir_generation(root), original);
 }
 
 fn index_dir_generation(root: &Path) -> String {

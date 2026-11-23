@@ -193,40 +193,104 @@ fn build_locked(
         std::fs::remove_dir_all(&staging)?;
     }
 
-    // Resolve previous generation; decide full vs incremental.
-    let prev = current_generation(&og_dir);
-    let prev_dir = prev.as_ref().map(|g| generations.join(g));
-    let prev_manifest = prev_dir
-        .as_ref()
-        .and_then(|dir| Index::open_generation(dir).ok())
-        .map(|idx| idx.manifest);
-    let compatible = prev_manifest
-        .as_ref()
-        .is_some_and(|m| m.model_id == embedder.id() && m.dims == embedder.dims());
-    let (new_staging, stats, content_hash, dims) = if mode == Incremental::Auto
-        && compatible
-        && let Some(prev_dir) = &prev_dir
-    {
-        incremental_build(root, prev_dir, embedder, &staging, quiet)?
-    } else {
-        if !quiet && prev.is_some() {
-            let why = if mode == Incremental::Force {
-                "forced"
-            } else if prev_manifest.is_none() {
-                "previous generation unreadable or incompatible"
-            } else {
-                "model changed"
-            };
-            eprintln!("Rebuilding ({why})");
+    let previous = current_generation(&og_dir);
+    let base = previous.as_ref().and_then(|name| {
+        let dir = generations.join(name);
+        let idx = Index::open_generation(&dir).ok()?;
+        (mode == Incremental::Auto
+            && idx.manifest.model_id == embedder.id()
+            && idx.manifest.dims == embedder.dims())
+        .then_some((dir, idx))
+    });
+    if !quiet && previous.is_some() && base.is_none() {
+        if mode == Incremental::Force {
+            eprintln!("Rebuilding (forced)");
+        } else {
+            eprintln!("Rebuilding (previous generation unreadable or incompatible)");
         }
-        full_build(root, embedder, &staging, quiet)?
+    }
+
+    let scan::ScanResult { files, ignored } = scan::scan(root)?;
+    if !quiet {
+        eprintln!(
+            "Scanned {} files ({ignored} ignore files in effect)",
+            files.len()
+        );
+    }
+
+    let mut deleted = match &base {
+        Some((_, idx)) => catalog::file_fingerprints(&idx.conn)?,
+        None => Default::default(),
     };
-    // Incremental no-op returns None: the current generation already
-    // matches the tree; skip manifest write, publish, and gc entirely.
-    let staging = match new_staging {
-        Some(dir) => dir,
-        None => return Ok(stats),
+    let mut changed = Vec::new();
+    for (path, (source, mtime)) in files {
+        let path = rel_path(root, &path)?;
+        if deleted.remove(&path) != Some((source.len() as i64, mtime as i64)) {
+            changed.push(SourceFile {
+                path,
+                source,
+                mtime: mtime as i64,
+            });
+        }
+    }
+    if let Some((_, idx)) = &base
+        && changed.is_empty()
+        && deleted.is_empty()
+    {
+        if !quiet {
+            eprintln!("Index up to date");
+        }
+        return stats_from_conn(&idx.conn);
+    }
+
+    let dims = embedder.dims();
+    let t0 = std::time::Instant::now();
+    std::fs::create_dir(&staging)?;
+    let catalog_path = staging.join("catalog.sqlite");
+    let vectors_path = staging.join("vectors-000.bin");
+    let (conn, mut vectors) = if let Some((dir, _)) = base {
+        if !quiet {
+            eprintln!(
+                "Updating {} changed, {} removed",
+                changed.len(),
+                deleted.len()
+            );
+        }
+        std::fs::copy(dir.join("catalog.sqlite"), &catalog_path)?;
+        std::fs::copy(dir.join("vectors-000.bin"), &vectors_path)?;
+        (
+            catalog::open(&catalog_path)?,
+            VectorWriter::open_existing(&vectors_path, dims)?,
+        )
+    } else {
+        let conn = catalog::open(&catalog_path)?;
+        catalog::init_schema(&conn)?;
+        (conn, VectorWriter::create(&vectors_path, dims)?)
     };
+
+    let mut deleted: Vec<_> = deleted.into_keys().collect();
+    deleted.sort_unstable();
+    for path in deleted {
+        vectors.zero_rows(&catalog::delete_file(&conn, &path)?)?;
+    }
+    store_files(&conn, &mut vectors, changed, embedder)?;
+    vectors.finish()?;
+
+    let stats = stats_from_conn(&conn)?;
+    let content_hash = compute_content_hash(&conn)?;
+    conn.pragma_update(None, "journal_mode", "DELETE")?;
+    drop(conn);
+    if !quiet {
+        eprintln!(
+            "Indexed {} blocks from {} files ({:.1}s)",
+            stats.blocks,
+            stats.files,
+            t0.elapsed().as_secs_f64()
+        );
+        if stats.skipped > 0 {
+            eprintln!("  {} files yielded no blocks", stats.skipped);
+        }
+    }
 
     let manifest = Manifest {
         version: MANIFEST_VERSION,
@@ -353,243 +417,47 @@ fn current_generation(og_dir: &Path) -> Option<String> {
         .filter(|s| valid_generation_name(s))
 }
 
-fn full_build(
-    root: &Path,
-    embedder: &dyn Embedder,
-    staging: &Path,
-    quiet: bool,
-) -> Result<(Option<PathBuf>, IndexStats, String, usize)> {
-    std::fs::create_dir_all(staging)?;
-    if !quiet {
-        eprint!("Scanning files...");
-    }
-    let scan::ScanResult { files, ignored } = scan::scan(root)?;
-    if !quiet {
-        if ignored > 0 {
-            eprintln!(
-                "\rScanned {} files ({} ignore file{} in effect)",
-                files.len(),
-                ignored,
-                if ignored == 1 { "" } else { "s" }
-            );
-        } else {
-            eprintln!("\rScanned {} files", files.len());
-        }
-    }
-
-    let t0 = std::time::Instant::now();
-    let mut file_vec: Vec<_> = files
-        .into_iter()
-        .map(|(path, (content, mtime))| (path, content, mtime))
-        .collect();
-    // Rowids break score ties, so hash-map iteration must not determine
-    // the ordering of a fresh build.
-    file_vec.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-    let results = extract_all(root, file_vec);
-
-    let conn = catalog::open(&staging.join("catalog.sqlite"))?;
-    catalog::init_schema(&conn)?;
-
-    let dims = embedder.dims();
-    let mut vec_writer = VectorWriter::create(&staging.join("vectors-000.bin"), dims)?;
-    embed_and_store(&conn, &mut vec_writer, results, embedder)?;
-    vec_writer.finish()?;
-
-    let stats = stats_from_conn(&conn)?;
-    let content_hash = compute_content_hash(&conn)?;
-    conn.pragma_update(None, "journal_mode", "DELETE")?;
-    if !quiet {
-        eprintln!(
-            "Indexed {} blocks from {} files ({:.1}s)",
-            stats.blocks,
-            stats.files,
-            t0.elapsed().as_secs_f64()
-        );
-        if stats.skipped > 0 {
-            eprintln!(
-                "  {} files yielded no blocks (below chunk minimum, or no constructs)",
-                stats.skipped
-            );
-        }
-    }
-    Ok((Some(staging.to_path_buf()), stats, content_hash, dims))
+struct SourceFile {
+    path: String,
+    source: String,
+    mtime: i64,
 }
 
-fn incremental_build(
-    root: &Path,
-    prev_dir: &Path,
-    embedder: &dyn Embedder,
-    staging: &Path,
-    quiet: bool,
-) -> Result<(Option<PathBuf>, IndexStats, String, usize)> {
-    // Diff against the PREVIOUS catalog (readonly) before copying: when
-    // nothing changed, skip the generation copy and republish entirely —
-    // the published generation is already current.
-    let prev_conn = catalog::open_readonly(&prev_dir.join("catalog.sqlite"))?;
-    let prev_fingerprints = catalog::file_fingerprints(&prev_conn)?;
-
-    if !quiet {
-        eprint!("Scanning files...");
-    }
-    let scan::ScanResult { files, ignored } = scan::scan(root)?;
-    if !quiet {
-        if ignored > 0 {
-            eprintln!(
-                "\rScanned {} files ({} ignore file{} in effect)",
-                files.len(),
-                ignored,
-                if ignored == 1 { "" } else { "s" }
-            );
-        } else {
-            eprintln!("\rScanned {} files", files.len());
-        }
-    }
-
-    // Diff: changed/new files need re-extraction + re-embed; deleted files
-    // are removed from the catalog.
-    let mut changed: Vec<(PathBuf, String, u64)> = Vec::new();
-    let mut deleted: Vec<String> = Vec::new();
-
-    let mut scan_fp: std::collections::HashMap<String, (i64, i64)> =
-        std::collections::HashMap::new();
-    for (path, (content, mtime)) in &files {
-        let rel = rel_path(root, path)?;
-        scan_fp.insert(rel.clone(), (content.len() as i64, *mtime as i64));
-        match prev_fingerprints.get(&rel) {
-            Some(&(size, m)) if size == content.len() as i64 && m == *mtime as i64 => {}
-            _ => changed.push((path.clone(), content.clone(), *mtime)),
-        }
-    }
-    for rel in prev_fingerprints.keys() {
-        if !scan_fp.contains_key(rel) {
-            deleted.push(rel.clone());
-        }
-    }
-
-    if changed.is_empty() && deleted.is_empty() {
-        if !quiet {
-            eprintln!("Index up to date");
-        }
-        // Signal no-op to the caller: the current generation is already
-        // correct; nothing should be copied, written, or republished.
-        let stats = stats_from_conn(&prev_conn)?;
-        return Ok((None, stats, String::new(), embedder.dims()));
-    } else if !quiet {
-        eprintln!(
-            "Updating {} changed, {} removed",
-            changed.len(),
-            deleted.len()
-        );
-    }
-
-    // Real changes: copy the previous generation as the staging base
-    // (immutable source), then edit the copy.
-    drop(prev_conn);
-    std::fs::create_dir(staging)?;
-    for name in ["catalog.sqlite", "vectors-000.bin"] {
-        std::fs::copy(prev_dir.join(name), staging.join(name))?;
-    }
-
-    // Deletions: remove catalog rows + zero vector rows.
-    let conn = catalog::open(&staging.join("catalog.sqlite"))?;
-    let mut vec_writer =
-        VectorWriter::open_existing(&staging.join("vectors-000.bin"), embedder.dims())?;
-    let mut deleted_rowids: Vec<i64> = Vec::new();
-    deleted.sort_unstable();
-    for rel in &deleted {
-        deleted_rowids.extend(catalog::delete_file(&conn, rel)?);
-    }
-    if !deleted_rowids.is_empty() {
-        vec_writer.zero_rows(&deleted_rowids)?;
-    }
-
-    // Changed files: embed_and_store handles per-file delete + re-insert
-    // (zeroing old vector rows, appending new ones at fresh rowids).
-    if !changed.is_empty() {
-        changed.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-        let results = extract_all(root, changed);
-        embed_and_store(&conn, &mut vec_writer, results, embedder)?;
-    }
-
-    vec_writer.finish()?;
-    let stats = stats_from_conn(&conn)?;
-    let content_hash = compute_content_hash(&conn)?;
-    conn.pragma_update(None, "journal_mode", "DELETE")?;
-    if !quiet && stats.skipped > 0 {
-        eprintln!(
-            "  {} files yielded no blocks (below chunk minimum, or no constructs)",
-            stats.skipped
-        );
-    }
-    Ok((
-        Some(staging.to_path_buf()),
-        stats,
-        content_hash,
-        embedder.dims(),
-    ))
-}
-
-/// Per-file extraction result: (rel_path, content_hash, size, mtime, blocks).
-type Extracted = anyhow::Result<(String, String, i64, i64, Vec<Block>)>;
-
-fn extract_all(root: &Path, files: Vec<(PathBuf, String, u64)>) -> Vec<Extracted> {
-    files
-        .into_par_iter()
-        .map(|(path, content, mtime)| {
-            let rel = rel_path(root, &path)?;
-            let size = content.len() as i64;
-            let hash = blake3::hash(content.as_bytes()).to_hex().to_string();
-            let mut extractor = crate::extract::Extractor::new();
-            let blocks = extractor.extract(&rel, &content)?;
-            Ok((rel, hash, size, mtime as i64, blocks))
-        })
-        .collect()
-}
-
-/// Embed extraction results and store file + blocks + vector rows.
-/// Vector rows are written at the IDs returned by SQLite.
-fn embed_and_store(
+fn store_files(
     conn: &rusqlite::Connection,
-    vec_writer: &mut VectorWriter,
-    results: Vec<Extracted>,
+    vectors: &mut VectorWriter,
+    mut files: Vec<SourceFile>,
     embedder: &dyn Embedder,
-) -> Result<IndexStats> {
-    let mut stats = IndexStats::default();
-    for result in results {
-        match result {
-            Ok((rel, hash, size, mtime, blocks)) => {
-                // Embed the whole file's blocks in one batch.
-                let texts: Vec<String> = blocks.iter().map(|b| b.embedding_text()).collect();
-                let refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
-                let embeddings = embedder.embed(&refs)?;
-
-                // Replace the file's rows atomically (delete + insert).
-                let old_ids = catalog::delete_file(conn, &rel)?;
-                vec_writer.zero_rows(&old_ids)?;
-
-                // insert_file returns the rowids SQLite actually assigned
-                // (it may reuse a freed max rowid); vectors are written at
-                // exactly those positions.
-                let rowids = catalog::insert_file(conn, &rel, size, mtime, &hash, &blocks)?;
-                anyhow::ensure!(
-                    rowids.len() == embeddings.len(),
-                    "wrong embedding count for {rel}"
-                );
-                for (rowid, v) in rowids.iter().zip(&embeddings) {
-                    vec_writer.write_at(*rowid, v)?;
-                }
-                if blocks.is_empty() {
-                    // Parsed/visible but produced nothing (e.g. prose below
-                    // the minimum chunk size, or no extractable constructs).
-                    stats.skipped += 1;
-                }
-                stats.files += 1;
-                stats.blocks += blocks.len();
-            }
-            Err(e) => return Err(e),
+) -> Result<()> {
+    // Stable insertion order makes score ties reproducible across fresh builds.
+    files.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+    let parsed: Vec<_> = files
+        .into_par_iter()
+        .map_init(crate::extract::Extractor::new, |extractor, file| {
+            let blocks = extractor
+                .extract(&file.path, &file.source)
+                .with_context(|| format!("extracting {}", file.path))?;
+            let size = file.source.len() as i64;
+            let hash = blake3::hash(file.source.as_bytes()).to_hex().to_string();
+            Ok::<_, anyhow::Error>((file.path, size, file.mtime, hash, blocks))
+        })
+        .collect();
+    for result in parsed {
+        let (path, size, mtime, hash, blocks) = result?;
+        let texts: Vec<_> = blocks.iter().map(Block::embedding_text).collect();
+        let refs: Vec<_> = texts.iter().map(String::as_str).collect();
+        let embeddings = embedder.embed(&refs)?;
+        anyhow::ensure!(
+            blocks.len() == embeddings.len(),
+            "wrong embedding count for {path}"
+        );
+        vectors.zero_rows(&catalog::delete_file(conn, &path)?)?;
+        let rowids = catalog::insert_file(conn, &path, size, mtime, &hash, &blocks)?;
+        for (id, vector) in rowids.into_iter().zip(embeddings) {
+            vectors.write_at(id, &vector)?;
         }
     }
-    Ok(stats)
+    Ok(())
 }
 
 fn stats_from_conn(conn: &rusqlite::Connection) -> Result<IndexStats> {
@@ -597,7 +465,6 @@ fn stats_from_conn(conn: &rusqlite::Connection) -> Result<IndexStats> {
         files: catalog::count_files(conn)?,
         blocks: catalog::count_blocks(conn)?,
         skipped: catalog::count_empty_files(conn)?,
-        ..Default::default()
     })
 }
 

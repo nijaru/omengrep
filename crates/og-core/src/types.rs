@@ -107,8 +107,6 @@ pub struct IndexStats {
     pub files: usize,
     pub blocks: usize,
     pub skipped: usize,
-    pub errors: usize,
-    pub deleted: usize,
 }
 
 /// Exit codes matching Python implementation.
