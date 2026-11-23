@@ -8,15 +8,20 @@ use og_core::index::{self, INDEX_DIR};
 
 pub fn run(path: &Path, quiet: bool) -> Result<()> {
     let start = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let (root, found) = index::find_index_root(&start);
+    let (root, found) = if start.join(INDEX_DIR).is_dir() {
+        // Includes a legacy or interrupted build without CURRENT.
+        (start.clone(), true)
+    } else {
+        index::find_index_root(&start)
+    };
     if !found {
         println!("No index found under {}", start.display());
         return Ok(());
     }
     let og_dir = root.join(INDEX_DIR);
-    std::fs::remove_dir_all(&og_dir)?;
+    index::clean(&root)?;
     if !quiet {
-        println!("Removed {}", og_dir.display());
+        println!("Removed index data from {}", og_dir.display());
     }
     Ok(())
 }

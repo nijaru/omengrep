@@ -42,9 +42,9 @@ pub struct SearchResult {
     pub block_type: String,
     /// Block name.
     pub name: String,
-    /// Start line.
+    /// Start line (1-indexed).
     pub line: usize,
-    /// End line.
+    /// End line (1-indexed).
     pub end_line: usize,
     /// Source content.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,10 +58,20 @@ pub struct SearchResult {
 pub enum FileRef {
     /// file#name — find block by name
     ByName { path: String, name: String },
-    /// file:line — find block by line number
+    /// file:line — find block by 1-indexed line number
     ByLine { path: String, line: usize },
     /// file — find first block
     ByFile { path: String },
+}
+
+impl FileRef {
+    pub fn parts(&self) -> (&str, Option<usize>, Option<&str>) {
+        match self {
+            Self::ByName { path, name } => (path, None, Some(name)),
+            Self::ByLine { path, line } => (path, Some(*line), None),
+            Self::ByFile { path } => (path, None, None),
+        }
+    }
 }
 
 /// Output format for search results.

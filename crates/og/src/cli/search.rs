@@ -7,11 +7,11 @@ use anyhow::{Result, bail};
 
 use og_core::output;
 use og_core::search;
-use og_core::types::{EXIT_ERROR, EXIT_MATCH, EXIT_NO_MATCH, FileRef, OutputFormat};
+use og_core::types::{EXIT_MATCH, EXIT_NO_MATCH, FileRef, OutputFormat};
 
 pub struct SearchParams<'a> {
     pub query: Option<&'a str>,
-    pub path: &'a Path,
+    pub path: Option<&'a Path>,
     pub num_results: usize,
     pub format: OutputFormat,
     pub quiet: bool,
@@ -30,6 +30,13 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
         None => bail!("No query provided. Run 'og --help' for usage."),
     };
 
+    let filters = search::Filters::new(
+        params.file_types,
+        params.exclude,
+        params.code_only,
+        params.regex,
+    )?;
+
     // File reference? -> similar-code search. Warn when the input is
     // ambiguous: a plausible search query that also names a real file
     // (e.g. `og auth.py` intending search) silently switches modes here.
@@ -46,27 +53,23 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
                 query
             );
         }
-        return run_similar(file_ref, params);
+        return run_similar(file_ref, params, &filters);
     }
 
+    let path = params.path.unwrap_or(Path::new("."));
     let t0 = Instant::now();
-    let (mut results, lexical_matched) = search::run_search(
+    let (results, lexical_matched) = search::run_search(
         query,
-        params.path,
+        path,
         params.num_results,
         !params.no_semantic,
         params.quiet,
+        &filters,
     )?;
     let search_time = t0.elapsed();
 
     if results.is_empty() {
-        if matches!(params.format, OutputFormat::Json) {
-            // Machine consumers get a valid empty array, not zero bytes.
-            println!("[]");
-        } else {
-            eprintln!("No results found");
-        }
-        std::process::exit(EXIT_NO_MATCH);
+        no_match(params.format, params.quiet, "No results found");
     }
 
     // Distinguish 'ranked matches' from 'semantic-only candidates': when
@@ -76,26 +79,7 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
         eprintln!("Note: no keyword matches; showing nearest semantic candidates only");
     }
 
-    results = search::filter_results(results, params.file_types, params.exclude, params.code_only);
-
-    if let Some(pattern) = params.regex {
-        match regex::Regex::new(pattern) {
-            Ok(re) => {
-                results.retain(|r| {
-                    r.content.as_deref().is_some_and(|c| re.is_match(c)) || re.is_match(&r.name)
-                });
-            }
-            Err(e) => {
-                eprintln!("Invalid regex: {e}");
-                std::process::exit(EXIT_ERROR);
-            }
-        }
-    }
-
-    let root = params
-        .path
-        .canonicalize()
-        .unwrap_or_else(|_| params.path.to_path_buf());
+    let root = path.canonicalize()?;
     output::print_results(
         &results,
         params.format,
@@ -119,59 +103,45 @@ pub fn run(params: &SearchParams<'_>) -> Result<()> {
         );
     }
 
-    std::process::exit(if results.is_empty() {
-        EXIT_NO_MATCH
-    } else {
-        EXIT_MATCH
-    });
+    std::process::exit(EXIT_MATCH);
 }
 
-fn run_similar(file_ref: FileRef, params: &SearchParams<'_>) -> Result<()> {
-    let (path, line, name) = match &file_ref {
-        FileRef::ByName { path, name } => (path.as_str(), None, Some(name.as_str())),
-        FileRef::ByLine { path, line } => (path.as_str(), Some(*line), None),
-        FileRef::ByFile { path } => (path.as_str(), None, None),
-    };
+fn no_match(format: OutputFormat, quiet: bool, message: &str) -> ! {
+    if matches!(format, OutputFormat::Json | OutputFormat::NoContent) {
+        println!("[]");
+    } else if !quiet {
+        eprintln!("{message}");
+    }
+    std::process::exit(EXIT_NO_MATCH);
+}
 
+fn run_similar(
+    file_ref: FileRef,
+    params: &SearchParams<'_>,
+    filters: &search::Filters,
+) -> Result<()> {
     let t0 = Instant::now();
-    let results = search::run_similar(path, line, name, params.num_results, params.quiet)?;
+    let results = search::run_similar(
+        &file_ref,
+        params.path,
+        params.num_results,
+        !params.no_semantic,
+        params.quiet,
+        filters,
+    )?;
     let search_time = t0.elapsed();
 
     if results.is_empty() {
-        if !matches!(params.format, OutputFormat::Json) {
-            // A doc-only file (markdown/text blocks) is the common no-match
-            // case for similar-code: prose blocks sit below the similarity
-            // floor. Say which happened instead of a bare nothing.
-            let is_doc_only = std::path::Path::new(path)
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|ext| {
-                    matches!(
-                        ext.to_ascii_lowercase().as_str(),
-                        "md" | "mdx" | "markdown" | "txt" | "rst"
-                    )
-                });
-            if is_doc_only {
-                eprintln!(
-                    "No similar code found — '{}' holds doc/text blocks, which are not eligible for similar-code search",
-                    path
-                );
-            } else {
-                eprintln!("No similar code found");
-            }
-        }
-        std::process::exit(EXIT_NO_MATCH);
+        no_match(params.format, params.quiet, "No similar code found");
     }
 
-    let root = params
-        .path
-        .canonicalize()
-        .unwrap_or_else(|_| params.path.to_path_buf());
+    let root = params.path.map(Path::canonicalize).transpose()?;
+    let (_, _, name) = file_ref.parts();
     output::print_results(
         &results,
         params.format,
         true,
-        Some(&root),
+        root.as_deref(),
         params.context_lines,
         params.highlight.then_some(name.unwrap_or("")),
     );

@@ -22,7 +22,7 @@ const SIMILARITY_FLOOR: f32 = 0.30;
 
 /// An open vector store for a published generation.
 pub struct VectorStore {
-    mmap: Mmap,
+    mmap: Option<Mmap>,
     dims: usize,
     row_bytes: usize,
 }
@@ -32,16 +32,23 @@ impl VectorStore {
     pub fn open(path: &Path, dims: usize) -> Result<Self> {
         let file =
             File::open(path).with_context(|| format!("opening vector store {}", path.display()))?;
-        let mmap = unsafe { Mmap::map(&file) }
-            .with_context(|| format!("mmapping vector store {}", path.display()))?;
-        let row_bytes = dims * FP16_BYTES;
-        if mmap.len() % row_bytes != 0 {
-            anyhow::bail!(
-                "vector store size {} not a multiple of row size {}",
-                mmap.len(),
-                row_bytes
-            );
-        }
+        let row_bytes = dims
+            .checked_mul(FP16_BYTES)
+            .filter(|&n| n != 0)
+            .context("invalid vector dimensions")?;
+        let size = file.metadata()?.len();
+        anyhow::ensure!(
+            size % row_bytes as u64 == 0,
+            "vector store size {size} not a multiple of row size {row_bytes}"
+        );
+        let mmap = if size == 0 {
+            None
+        } else {
+            Some(
+                unsafe { Mmap::map(&file) }
+                    .with_context(|| format!("mmapping vector store {}", path.display()))?,
+            )
+        };
         Ok(Self {
             mmap,
             dims,
@@ -50,11 +57,11 @@ impl VectorStore {
     }
 
     pub fn len(&self) -> usize {
-        self.mmap.len() / self.row_bytes
+        self.mmap.as_ref().map_or(0, |m| m.len() / self.row_bytes)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.mmap.is_empty()
+        self.mmap.is_none()
     }
 
     pub fn dims(&self) -> usize {
@@ -62,17 +69,30 @@ impl VectorStore {
     }
 
     fn row(&self, i: usize) -> &[u8] {
-        &self.mmap[i * self.row_bytes..(i + 1) * self.row_bytes]
+        &self.mmap.as_deref().expect("nonempty vector store")
+            [i * self.row_bytes..(i + 1) * self.row_bytes]
     }
 
     /// Exact cosine scan: top-k (block rowid, similarity) pairs.
     /// `query` must be unit-normalized. Rowids are 1-based, matching blocks.id.
     pub fn top_k(&self, query: &[f32], k: usize) -> Vec<(i64, f32)> {
+        self.top_k_where(query, k, |_| true)
+    }
+
+    pub(crate) fn top_k_where(
+        &self,
+        query: &[f32],
+        k: usize,
+        eligible: impl Fn(i64) -> bool + Sync,
+    ) -> Vec<(i64, f32)> {
         debug_assert_eq!(query.len(), self.dims, "query/vector dim mismatch");
-        let n = self.len();
-        let scores: Vec<f32> = (0..n)
+        let mut ranked: Vec<(i64, f32)> = (0..self.len())
             .into_par_iter()
-            .map(|i| {
+            .filter_map(|i| {
+                let rowid = i as i64 + 1;
+                if !eligible(rowid) {
+                    return None;
+                }
                 let bytes = self.row(i);
                 let mut dot = 0.0f32;
                 for (j, &q) in query.iter().enumerate() {
@@ -80,24 +100,12 @@ impl VectorStore {
                     let lane = [bytes[j * FP16_BYTES], bytes[j * FP16_BYTES + 1]];
                     dot += q * half::f16::from_le_bytes(lane).to_f32();
                 }
-                dot
+                (dot >= SIMILARITY_FLOOR).then_some((rowid, dot))
             })
             .collect();
-
-        let mut ranked: Vec<(usize, f32)> = scores
-            .into_iter()
-            .enumerate()
-            .filter(|(_, s)| *s >= SIMILARITY_FLOOR)
-            .collect();
-        if ranked.is_empty() {
-            return Vec::new();
-        }
-        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        ranked.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+        ranked.truncate(k);
         ranked
-            .into_iter()
-            .take(k)
-            .map(|(i, s)| (i as i64 + 1, s))
-            .collect()
     }
 }
 

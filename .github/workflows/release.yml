@@ -76,10 +76,13 @@ jobs:
         run: cargo fmt --check
 
       - name: Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      - name: Build
-        run: cargo check
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Verify workspace packages
+        run: cargo package --workspace --locked
 
   # ============================================================================
   # STAGE 2: Build binaries (parallel)
@@ -109,12 +112,12 @@ jobs:
         run: |
           cargo build --release --target ${{ matrix.target }}
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/og dist/
+          cp target/${{ matrix.target }}/release/og LICENSE dist/
 
       - name: Create tarball
         run: |
           cd dist
-          tar czf ${{ matrix.artifact_name }}.tar.gz og
+          tar czf ${{ matrix.artifact_name }}.tar.gz og LICENSE
           if command -v sha256sum &> /dev/null; then
             sha256sum ${{ matrix.artifact_name }}.tar.gz > ${{ matrix.artifact_name }}.tar.gz.sha256
           else
@@ -151,13 +154,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.verify.outputs.tag }}
         run: |
-          # Delete any existing draft for this tag (re-run safety)
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --generate-notes \
-            --draft \
-            artifacts/*
+          # Resume a draft on retry, but never modify a published release.
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft); then
+            if [[ "$draft" == true ]]; then
+              gh release upload "$TAG" artifacts/* --clobber
+            fi
+          else
+            gh release create "$TAG" \
+              --verify-tag \
+              --title "$TAG" \
+              --generate-notes \
+              --draft \
+              artifacts/*
+          fi
 
   # ============================================================================
   # STAGE 4: Publish to crates.io (trusted publishing via OIDC)
@@ -186,35 +195,29 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          # Publish both workspace crates explicitly (root `cargo publish`
-          # alone fails since the rename to package `omengrep` + `og-core`).
-          # Order matters: og-core (dependency) before omengrep (binary).
+          # New crates need a manual first publication before enabling OIDC.
+          # Publish the library before the binary so Cargo can resolve it.
           publish() {
-            local crate=$1
-            if OUTPUT=$(cargo publish -p "$crate" 2>&1); then
-              echo "$OUTPUT"
-            else
-              STATUS=$?
-              echo "$OUTPUT"
-              if echo "$OUTPUT" | grep -q "already exists on crates.io"; then
-                echo "Version $VERSION of $crate already published to crates.io, skipping"
-              else
-                exit $STATUS
-              fi
-            fi
+            local crate=$1 status
+            status=$(curl -sS --retry 3 --max-time 30 -o /dev/null -w '%{http_code}' \
+              "https://crates.io/api/v1/crates/$crate/$VERSION")
+            case "$status" in
+              200) echo "$crate $VERSION already published; skipping" ;;
+              404) cargo publish --locked -p "$crate" ;;
+              *) echo "Could not check $crate $VERSION on crates.io (HTTP $status)" >&2; return 1 ;;
+            esac
           }
           publish og-core
           publish omengrep
 
   # ============================================================================
-  # STAGE 5: Update Homebrew tap
+  # STAGE 6: Update Homebrew tap (after GitHub assets are public)
   # ============================================================================
 
   update-homebrew:
     name: Update Homebrew Tap
-    needs: [verify, create-release]
+    needs: [verify, finalize]
     if: startsWith(github.ref, 'refs/tags/') && !inputs.dry-run
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -290,12 +293,12 @@ jobs:
           fi
 
   # ============================================================================
-  # STAGE 6: Finalize release
+  # STAGE 5: Finalize GitHub release after crates.io publication
   # ============================================================================
 
   finalize:
     name: Finalize Release
-    needs: [verify, create-release, publish-crates, update-homebrew]
+    needs: [verify, create-release, publish-crates]
     if: startsWith(github.ref, 'refs/tags/') && !inputs.dry-run
     runs-on: ubuntu-latest
     steps:
@@ -305,7 +308,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.verify.outputs.tag }}
-        run: gh release edit "$TAG" --draft=false
+        run: |
+          draft=$(gh release view "$TAG" --json isDraft --jq .isDraft)
+          if [[ "$draft" == true ]]; then
+            gh release edit "$TAG" --draft=false
+          fi
 
       - name: Summary
         env:
@@ -317,4 +324,3 @@ jobs:
           echo "- **Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Release**: https://github.com/nijaru/omengrep/releases/tag/$TAG" >> $GITHUB_STEP_SUMMARY
           echo "- **crates.io**: https://crates.io/crates/omengrep/$VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "- **Homebrew**: \`brew upgrade og\`" >> $GITHUB_STEP_SUMMARY

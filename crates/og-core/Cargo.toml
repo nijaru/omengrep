@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 ignore = { workspace = true }
+globset = "0.4"
 rayon = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }

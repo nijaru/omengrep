@@ -4,15 +4,13 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OpenFlags, params};
 
 use crate::types::Block;
 
 /// Catalog + sidecar storage schema version. Bump on incompatible changes.
-/// (Set to 1 at first release: pre-release format iterations never shipped,
-/// so fp16 rows are simply v1. The version exists for future format
-/// changes — mismatch forces a full rebuild rather than a wrong read.)
-pub const SCHEMA_VERSION: i64 = 1;
+/// Version 2 stores file mtimes in nanoseconds rather than seconds.
+pub const SCHEMA_VERSION: i64 = 2;
 
 pub fn open(path: &Path) -> Result<Connection> {
     let conn =
@@ -25,15 +23,19 @@ pub fn open(path: &Path) -> Result<Connection> {
 
 /// Open a published generation's catalog read-only (immutable assumption).
 pub fn open_readonly(path: &Path) -> Result<Connection> {
-    let conn =
-        Connection::open(path).with_context(|| format!("opening catalog {}", path.display()))?;
-    conn.pragma_update(None, "query_only", "ON")?;
-    // SQLite defers reading the file until the first query: a corrupt
-    // catalog opens fine and only fails mid-read later. Force a trivial
-    // read now so every caller gets an immediate, contextual error (and
-    // health checks can trust is_ok()).
-    conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
-        .with_context(|| format!("catalog {} unreadable (corrupt?)", path.display()))?;
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .with_context(|| format!("opening catalog {}", path.display()))?;
+    // Opening a missing file must not create it, and an empty or unrelated
+    // SQLite database must not pass the generation's health check.
+    for sql in [
+        "SELECT path, size, mtime, hash FROM files LIMIT 0",
+        "SELECT id, file, block_type, name, start_line, end_line, content, skeleton FROM blocks LIMIT 0",
+        "SELECT rowid FROM block_fts WHERE block_fts MATCH 'check' LIMIT 0",
+        "SELECT rowid FROM block_trigram WHERE block_trigram MATCH 'check' LIMIT 0",
+    ] {
+        conn.prepare(sql)
+            .with_context(|| format!("catalog {} has an unreadable schema", path.display()))?;
+    }
     Ok(conn)
 }
 

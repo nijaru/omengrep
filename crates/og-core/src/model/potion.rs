@@ -2,15 +2,15 @@
 //!
 //! Re-implements model2vec's StaticModel.encode in Rust: WordPiece tokenize
 //! (no special tokens) → filter [UNK] → truncate to max_length → mean-pool
-//! embedding rows → L2 normalize (config-driven). No ONNX runtime, no
+//! embedding rows → L2 normalize. No ONNX runtime, no
 //! neural warm-up: inference is a row lookup plus pooling.
 //!
 //! Reference semantics (MinishLab/model2vec model2vec/model.py):
 //! - `tokenize`: encode_batch_fast(add_special_tokens=False); ids with
 //!   unk_token_id are dropped; pre-truncate input at
 //!   max_length * median_token_length chars, then truncate ids to max_length.
-//! - `encode`: mean-pool rows; empty token list → zero vector; then
-//!   normalize if config says so (potion config.json: normalize=true).
+//! - `encode`: mean-pool rows and normalize as required by the pinned
+//!   snapshot (config.json: normalize=true); empty input → zero vector.
 //! - Identity: the weights file hash + tokenizer hash + dims are pinned in
 //!   the index manifest; a mismatch forces a rebuild (no vector-space mixing).
 
@@ -23,6 +23,8 @@ use crate::model::Embedder;
 
 /// Default model on the Hub.
 pub const DEFAULT_REPO: &str = "minishlab/potion-code-16M-v2";
+const DEFAULT_REVISION: &str = "e9d2a44ca6a05ac6685f3b23709ea57eb7352d5b";
+const MODEL_FILES: [&str; 3] = ["model.safetensors", "tokenizer.json", "config.json"];
 
 /// Reference default (model2vec DEFAULT_MAX_LENGTH).
 const MAX_LENGTH: usize = 512;
@@ -36,7 +38,6 @@ pub struct PotionEmbedder {
     vocab_size: usize,
     unk_token_id: Option<u32>,
     median_token_length: usize,
-    normalize: bool,
 }
 
 impl PotionEmbedder {
@@ -89,12 +90,15 @@ impl PotionEmbedder {
         let lengths: Vec<usize> = tokens.keys().map(|t: &String| t.len()).collect();
         let median_token_length = median(&mut lengths.clone()).clamp(1, 8);
 
-        // Config: normalize (potion ships true).
-        let normalize = std::fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-            .and_then(|v| v.get("normalize").and_then(|n| n.as_bool()))
-            .unwrap_or(true);
+        // The index compares dot products as cosines, so this backend
+        // accepts only normalized models. A config change must not
+        // silently change encoding under the same model identity.
+        let config: serde_json::Value = serde_json::from_slice(&std::fs::read(&config_path)?)
+            .with_context(|| format!("parsing {}", config_path.display()))?;
+        anyhow::ensure!(
+            config.get("normalize").and_then(|v| v.as_bool()) == Some(true),
+            "Potion config must enable normalization"
+        );
 
         // Identity pins weights + tokenizer bytes.
         let id = format!(
@@ -114,7 +118,6 @@ impl PotionEmbedder {
             vocab_size,
             unk_token_id,
             median_token_length,
-            normalize,
         })
     }
 
@@ -198,9 +201,7 @@ impl PotionEmbedder {
     fn embed_one(&self, text: &str) -> Vec<f32> {
         let ids = self.token_ids(text);
         let mut v = self.mean_pool(&ids);
-        if self.normalize {
-            Self::l2_normalize(&mut v);
-        }
+        Self::l2_normalize(&mut v);
         v
     }
 }
@@ -214,81 +215,45 @@ fn median(sorted: &mut [usize]) -> usize {
     sorted[sorted.len() / 2]
 }
 
-/// Local-only presence check for the default model snapshot: no network,
-/// no download. `og model status` must not fetch anything.
-pub fn default_model_cached() -> Option<PathBuf> {
-    use hf_hub::Cache;
-
-    let cache = Cache::from_env();
-    let cache_repo = cache.repo(hf_hub::Repo::new(
-        DEFAULT_REPO.to_string(),
+fn default_repo() -> hf_hub::Repo {
+    hf_hub::Repo::with_revision(
+        DEFAULT_REPO.into(),
         hf_hub::RepoType::Model,
-    ));
-    let names = ["model.safetensors", "tokenizer.json", "config.json"];
-    let cached: Vec<PathBuf> = names.iter().filter_map(|n| cache_repo.get(n)).collect();
-    if cached.len() == names.len() {
-        cached[0].parent().map(Path::to_path_buf)
-    } else {
-        None
-    }
+        DEFAULT_REVISION.into(),
+    )
 }
 
-/// Download (or resolve from cache) the default potion model.
-///
-/// Latency gate (tk-1i9o): every CLI invocation resolves the model, so a
-/// cached model must NEVER touch the network. `Repo::get` is the offline
-/// cache lookup; `Repo::download` revalidates against the server (~2.4s
-/// for 3 files) and is only used on a true cache miss (first install).
+/// Local-only presence check. Look directly in the pinned snapshot so an
+/// existing download via the main branch is reusable without networking.
+pub fn default_model_cached() -> Option<PathBuf> {
+    let cache = hf_hub::Cache::from_env();
+    let dir = cache.repo(default_repo()).pointer_path(DEFAULT_REVISION);
+    MODEL_FILES
+        .iter()
+        .all(|name| dir.join(name).is_file())
+        .then_some(dir)
+}
+
 fn download_default_model() -> Result<PathBuf> {
-    use hf_hub::Cache;
-    use hf_hub::api::sync::ApiBuilder;
-
-    // Cache::from_env honors HF_HOME (the standard relocation env var);
-    // Api::new() would hardcode ~/.cache/huggingface/hub and silently
-    // re-download the model for anyone who moved their cache.
-    let api = ApiBuilder::from_cache(Cache::from_env())
-        .build()
-        .context("creating HF API client (offline?)")?;
-    let repo = api.model(DEFAULT_REPO.to_string());
-    let names = ["model.safetensors", "tokenizer.json", "config.json"];
-
-    // LOCAL-ONLY cache probe: Repo::get() downloads on miss, which would
-    // silently fetch the model here — exactly the invisible pause this
-    // function exists to announce. Cache::repo().get() reads disk only.
-    let cache = Cache::from_env();
-    let cache_repo = cache.repo(hf_hub::Repo::new(
-        DEFAULT_REPO.to_string(),
-        hf_hub::RepoType::Model,
-    ));
-    let cached: Vec<PathBuf> = names.iter().filter_map(|n| cache_repo.get(n)).collect();
-    if cached.len() == names.len() {
-        return cached[0]
-            .parent()
-            .map(Path::to_path_buf)
-            .context("snapshot dir");
+    if let Some(dir) = default_model_cached() {
+        return Ok(dir);
     }
 
-    // True cache miss: announce the download so the first-use pause is
-    // legible instead of a silent multi-second hang mid-build.
+    let cache = hf_hub::Cache::from_env();
     eprintln!(
         "Downloading embedding model {DEFAULT_REPO} (~33 MB, first use) to {}",
-        Cache::from_env().path().display()
+        cache.path().display()
     );
-    let mut files = Vec::new();
-    for name in names {
-        let path = repo.download(name).map_err(|e| {
-            anyhow!(
-                "downloading {name} from {DEFAULT_REPO}: {e}
-                 check network, or set HF_HOME to a cache that holds the model                  (run 'og model install' with network to prefetch)"
-            )
+    let api = hf_hub::api::sync::ApiBuilder::from_cache(cache)
+        .build()
+        .context("creating HF API client (offline?)")?;
+    let repo = api.repo(default_repo());
+    for name in MODEL_FILES {
+        repo.get(name).with_context(|| {
+            format!("downloading {name} from {DEFAULT_REPO}; run 'og model install' with network to prefetch")
         })?;
-        files.push(path);
     }
-    // All files live in the same snapshot dir.
-    files[0]
-        .parent()
-        .map(Path::to_path_buf)
-        .context("snapshot dir")
+    default_model_cached().context("model download did not populate the pinned snapshot")
 }
 
 #[cfg(test)]

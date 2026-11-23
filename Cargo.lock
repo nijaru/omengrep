@@ -1363,6 +1363,7 @@ version = "0.0.4"
 dependencies = [
  "anyhow",
  "blake3",
+ "globset",
  "half",
  "hf-hub",
  "ignore",
@@ -1412,7 +1413,6 @@ dependencies = [
  "og-core",
  "owo-colors",
  "predicates",
- "regex",
  "serde_json",
  "tempfile",
  "usage-rs",

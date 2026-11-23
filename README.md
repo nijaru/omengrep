@@ -53,11 +53,11 @@ The embedding model (~33 MB) downloads automatically on first use — announced 
 og build [path]                # Build index (required first)
 og "query" [path]              # Search
 og file.rs#func_name           # Find code similar to a named block
-og file.rs:42                  # Find code similar to a specific line
+og file.rs:42                  # Find code similar to a specific line (1-based)
 og outline [path]              # Show indexed block structure
 og context [path]              # Show ranked file/symbol context
 og status [path]               # Index health: freshness, size, corruption
-og clean [path]                # Delete index
+og clean [path]                # Delete index data
 og model status                # Show embedding model status
 og model install               # Download the embedding model
 
@@ -75,7 +75,9 @@ og outline --skeleton .        # Full signatures without bodies
 og context -n 12 --symbols 5 . # Ranked files/symbols, token-budgeted
 ```
 
-Set `OG_AUTO_BUILD=1` to build the index automatically on first search. Searching a changed tree auto-updates the index first.
+Set `OG_AUTO_BUILD=1` to build the index automatically on first search. Searching a changed tree auto-updates the index first; a failed refresh is reported as an error.
+
+Path, type, exclude, and regex filters apply before the result limit. Exclude globs match index-relative paths or basenames (use `**` to match across directories). Search, outline, and context report 1-based lines.
 
 Exit codes: 0 = match found, 1 = no match, 2 = error.
 
@@ -115,6 +117,7 @@ At search time the channels fuse with RRF, then code-aware boosts (exact name, p
 
 ```text
 .og/
+├── LOCK                     # writer lock (retained by og clean)
 ├── CURRENT                  # pointer file: published generation name
 └── generations/
     └── g-<hash>/            # content + model + schema hash
@@ -125,7 +128,7 @@ At search time the channels fuse with RRF, then code-aware boosts (exact name, p
 
 Builds publish atomically: a staging generation is completed, then `CURRENT` flips to it. Readers never see a partial index, and a killed build leaves the previous generation readable. Fingerprint diffing re-embeds only changed files on rebuild.
 
-**Upgrading from 0.0.3 or earlier:** the index format changed completely (previously OmenDB-backed). Delete old `.og` directories or just run `og build` — the new core builds a fresh generation and leaves legacy files untouched.
+**Upgrading:** run `og build` to regenerate an incompatible index. This includes OmenDB indexes from 0.0.3 and older development builds of 0.0.4 with whole-second timestamps. You can reclaim space used by legacy index files with `og clean`.
 
 ## Benchmarks
 

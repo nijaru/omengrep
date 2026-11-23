@@ -16,11 +16,13 @@ import sys
 
 def run(binary, corpus, query, extra, n=10):
     cmd = [binary, *extra, query, "-j", "-n", str(n), corpus]
-    try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        return [(r["file"], r["name"]) for r in json.loads(out.stdout)]
-    except Exception:
-        return []
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if out.returncode not in (0, 1):
+        raise RuntimeError(f"{cmd!r} exited {out.returncode}: {out.stderr.strip()}")
+    results = json.loads(out.stdout)
+    if not isinstance(results, list) or bool(results) != (out.returncode == 0):
+        raise ValueError(f"{cmd!r} returned inconsistent results and exit status")
+    return [(r["file"], r["name"]) for r in results]
 
 
 def rr(hits, relevant):

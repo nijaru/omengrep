@@ -10,7 +10,7 @@ repository = "https://github.com/nijaru/omengrep"
 homepage = "https://github.com/nijaru/omengrep"
 
 [workspace.dependencies]
-og-core = { path = "crates/og-core" }
+og-core = { path = "crates/og-core", version = "0.0.4" }
 
 anyhow = "1"
 usage = { package = "usage-rs", version = "6" }

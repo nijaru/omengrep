@@ -10,11 +10,14 @@
 //!   pinned model covers all indexed blocks (always true in the slice:
 //!   full rebuild embeds every block).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use anyhow::Result;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::index::Index;
+use crate::search::{Filters, Scope};
 use crate::types::SearchResult;
 
 /// RRF constant (standard 60 from TREC).
@@ -36,7 +39,7 @@ pub fn rrf_fuse(channels: &[(f32, Channel)], k: usize) -> Vec<(i64, f32)> {
         }
     }
     let mut out: Vec<(i64, f32)> = fused.into_iter().collect();
-    out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
     out.truncate(k);
     out
 }
@@ -44,7 +47,7 @@ pub fn rrf_fuse(channels: &[(f32, Channel)], k: usize) -> Vec<(i64, f32)> {
 /// How many candidates each channel fetches before fusion (fusion needs
 /// deeper pools than the final k to be meaningful).
 fn fetch_k(k: usize) -> usize {
-    (k * 10).max(50)
+    k.saturating_mul(10).clamp(50, i64::MAX as usize)
 }
 
 /// Escape a term for an FTS5 MATCH string literal (double-quote wrapping).
@@ -59,27 +62,45 @@ pub fn search(
     k: usize,
     with_semantic: bool,
 ) -> Result<Vec<SearchResult>> {
-    search_with_signal(index, query, k, with_semantic).map(|(r, _)| r)
+    search_with_signal(
+        index,
+        query,
+        k,
+        with_semantic,
+        &Filters::default(),
+        &Scope::All,
+    )
+    .map(|(r, _)| r)
 }
 
 /// Search result plus the channel-participation signal: when the lexical
 /// channels (BM25 + trigram) come up empty, hits are semantic-only noise
 /// candidates rather than keyword matches. The CLI surfaces this so a
 /// missed identifier looks different from a ranked hit.
-pub fn search_with_signal(
+pub(crate) fn search_with_signal(
     index: &Index,
     query: &str,
     k: usize,
     with_semantic: bool,
+    filters: &Filters,
+    scope: &Scope,
 ) -> Result<(Vec<SearchResult>, bool)> {
+    if k == 0 || query.trim().is_empty() {
+        return Ok((Vec::new(), false));
+    }
+    let pool = fetch_k(k);
+    let eligible = Candidates::new(&index.conn, filters, scope, None)?;
+    if eligible.is_empty() {
+        return Ok((Vec::new(), false));
+    }
     // Query preparation (ported): identifier split + synonym expansion.
     let split = crate::tokenize::split_identifiers(query);
     let expanded = crate::synonyms::expand_query(&split);
 
-    let bm25_hits = bm25_search(&index.conn, &expanded, fetch_k(k))?;
-    let trigram_hits = trigram_search(&index.conn, query, fetch_k(k))?;
+    let bm25_hits = bm25_search(&index.conn, &expanded, pool, &eligible)?;
+    let trigram_hits = trigram_search(&index.conn, query, pool, &eligible)?;
     let vector_hits = if with_semantic {
-        vector_search(index, query, fetch_k(k))?
+        vector_search(index, query, pool, &eligible)?
     } else {
         Vec::new()
     };
@@ -104,39 +125,108 @@ pub fn similar(
     name: Option<&str>,
     k: usize,
 ) -> Result<Vec<SearchResult>> {
+    similar_filtered(
+        index,
+        (file, line, name),
+        k,
+        true,
+        &Filters::default(),
+        &Scope::All,
+    )
+}
+
+pub(crate) fn similar_filtered(
+    index: &Index,
+    (file, line, name): (&str, Option<usize>, Option<&str>),
+    k: usize,
+    with_semantic: bool,
+    filters: &Filters,
+    scope: &Scope,
+) -> Result<Vec<SearchResult>> {
+    if k == 0 {
+        return Ok(Vec::new());
+    }
     let Some((block_id, ref_name, ref_content)) = resolve_reference(&index.conn, file, line, name)?
     else {
         return Ok(Vec::new());
     };
-
-    // Vector channel: embed the reference content, exact scan (manifest-pinned model).
-    let embedder = crate::model::embedder_for(&index.manifest.model_id)?;
-    let embedded = embedder.embed(&[&ref_content])?;
-    let vector_hits = index.vectors.top_k(&embedded[0], k + 1);
-
-    // BM25 channel: the reference's own identifier terms bring name siblings.
-    let ref_terms = crate::tokenize::split_identifiers(&ref_content);
-    let bm25_hits = bm25_search(&index.conn, &ref_terms, fetch_k(k))?;
-
-    let mut channels: Vec<(f32, Channel)> = vec![(1.0, vector_hits)];
-    if !bm25_hits.is_empty() {
-        channels.push((0.5, bm25_hits));
+    let pool = fetch_k(k);
+    let eligible = Candidates::new(&index.conn, filters, scope, Some(block_id))?;
+    if eligible.is_empty() {
+        return Ok(Vec::new());
     }
-    let fused = rrf_fuse(&channels, k + 1);
+    let vector_hits = if with_semantic {
+        vector_search(index, &ref_content, pool, &eligible)?
+    } else {
+        Vec::new()
+    };
+    let ref_terms = crate::tokenize::split_identifiers(&ref_content);
+    let bm25_hits = bm25_search(&index.conn, &ref_terms, pool, &eligible)?;
 
+    let fused = rrf_fuse(&[(1.0, vector_hits), (0.5, bm25_hits)], k);
     let mut results = hydrate(&index.conn, fused)?;
-    // Exclude the reference block itself.
-    results.retain(|r| r_row_id(&index.conn, &r.file, r.line) != Some(block_id));
     crate::boost::boost_results(&mut results, name.unwrap_or(&ref_name));
-    results.truncate(k);
     Ok(results)
+}
+
+/// One eligibility set for all channels. The common all-files query
+/// doesn't need a catalog pass; a similar-code query excludes its seed
+/// by rowid (several different blocks can share a start line).
+struct Candidates {
+    only: Option<HashSet<i64>>,
+    except: Option<i64>,
+}
+
+impl Candidates {
+    fn new(
+        conn: &Connection,
+        filters: &Filters,
+        scope: &Scope,
+        except: Option<i64>,
+    ) -> Result<Self> {
+        let only = if matches!(scope, Scope::All) && filters.is_empty() {
+            None
+        } else {
+            let mut ids = HashSet::new();
+            let mut stmt =
+                conn.prepare("SELECT id, file, name, CASE WHEN ?1 THEN content END FROM blocks")?;
+            let mut rows = stmt.query([filters.regex.is_some()])?;
+            while let Some(row) = rows.next()? {
+                let file = Path::new(row.get_ref(1)?.as_str()?);
+                if !scope.contains(file) || !filters.matches_file(file) {
+                    continue;
+                }
+                if let Some(regex) = &filters.regex
+                    && !regex.is_match(row.get_ref(2)?.as_str()?)
+                    && !regex.is_match(row.get_ref(3)?.as_str()?)
+                {
+                    continue;
+                }
+                ids.insert(row.get(0)?);
+            }
+            Some(ids)
+        };
+        Ok(Self { only, except })
+    }
+
+    fn unrestricted(&self) -> bool {
+        self.only.is_none() && self.except.is_none()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.only.as_ref().is_some_and(HashSet::is_empty)
+    }
+
+    fn contains(&self, id: i64) -> bool {
+        self.except != Some(id) && self.only.as_ref().is_none_or(|ids| ids.contains(&id))
+    }
 }
 
 // --- channels ---
 
 /// BM25 over identifier-split terms, OR-matched (mem lesson 08e9fe4:
 /// partial matches rank; full matches rank above partial).
-fn bm25_search(conn: &rusqlite::Connection, terms: &str, k: usize) -> Result<Channel> {
+fn bm25_search(conn: &Connection, terms: &str, k: usize, eligible: &Candidates) -> Result<Channel> {
     let split: Vec<&str> = terms.split_whitespace().collect();
     if split.is_empty() {
         return Ok(Vec::new());
@@ -147,53 +237,71 @@ fn bm25_search(conn: &rusqlite::Connection, terms: &str, k: usize) -> Result<Cha
         .collect::<Vec<_>>()
         .join(" OR ");
 
-    let sql = format!(
-        "SELECT block_id, bm25(block_fts) AS score
-         FROM block_fts
-         WHERE block_fts MATCH ?
-         ORDER BY score
-         LIMIT {k}"
-    );
-    let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt
-        .query_map([&match_expr], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, f32>(1)?))
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows)
+    fts_search(conn, "block_fts", &match_expr, k, eligible)
 }
 
 /// Trigram substring channel over block names.
-fn trigram_search(conn: &rusqlite::Connection, query: &str, k: usize) -> Result<Channel> {
+fn trigram_search(
+    conn: &Connection,
+    query: &str,
+    k: usize,
+    eligible: &Candidates,
+) -> Result<Channel> {
     let trimmed = query.trim();
     if trimmed.len() < 3 {
         return Ok(Vec::new());
     }
-    let match_expr = fts_quote(trimmed);
+    fts_search(conn, "block_trigram", &fts_quote(trimmed), k, eligible)
+}
 
+fn fts_search(
+    conn: &Connection,
+    table: &str,
+    query: &str,
+    k: usize,
+    eligible: &Candidates,
+) -> Result<Channel> {
+    // LIMIT must count eligible hits, not rank positions in the whole
+    // index. Retain the SQLite limit for unfiltered searches.
     let sql = format!(
-        "SELECT block_id, bm25(block_trigram) AS score
-         FROM block_trigram
-         WHERE block_trigram MATCH ?
-         ORDER BY score
-         LIMIT {k}"
+        "SELECT rowid, bm25({table}) AS score FROM {table}
+                       WHERE {table} MATCH ?1 ORDER BY score, rowid LIMIT ?2"
     );
+    let limit = if eligible.unrestricted() {
+        k as i64
+    } else {
+        -1
+    };
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt
-        .query_map([&match_expr], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, f32>(1)?))
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows)
+    let mut rows = stmt.query(rusqlite::params![query, limit])?;
+    let mut hits = Vec::new();
+    while hits.len() < k
+        && let Some(row) = rows.next()?
+    {
+        let id = row.get(0)?;
+        if eligible.contains(id) {
+            hits.push((id, row.get(1)?));
+        }
+    }
+    Ok(hits)
 }
 
 /// Vector exact scan. The embedder is constructed from the manifest's
 /// pinned identity — never a default — so query and index vectors live in
-/// the same space. Cache-miss at query time degrades to no vector channel.
-fn vector_search(index: &Index, query: &str, k: usize) -> Result<Channel> {
+/// the same space.
+fn vector_search(index: &Index, query: &str, k: usize, eligible: &Candidates) -> Result<Channel> {
+    if index.vectors.is_empty() {
+        return Ok(Vec::new());
+    }
     let embedder = crate::model::embedder_for(&index.manifest.model_id)?;
+    anyhow::ensure!(
+        embedder.dims() == index.vectors.dims(),
+        "model/vector dimension mismatch"
+    );
     let embedded = embedder.embed(&[query])?;
-    Ok(index.vectors.top_k(&embedded[0], k))
+    Ok(index
+        .vectors
+        .top_k_where(&embedded[0], k, |id| eligible.contains(id)))
 }
 
 // --- hydration ---
@@ -204,23 +312,22 @@ fn hydrate(conn: &rusqlite::Connection, ranked: Vec<(i64, f32)>) -> Result<Vec<S
         return Ok(Vec::new());
     }
     let mut results = Vec::with_capacity(ranked.len());
+    let mut stmt = conn.prepare(
+        "SELECT file, block_type, name, start_line, end_line, content
+                                 FROM blocks WHERE id = ?1",
+    )?;
     for (block_id, fused) in ranked {
-        let row = conn.query_row(
-            "SELECT file, block_type, name, start_line, end_line, content
-             FROM blocks WHERE id = ?1",
-            rusqlite::params![block_id],
-            |row| {
-                Ok(SearchResult {
-                    file: row.get(0)?,
-                    block_type: row.get(1)?,
-                    name: row.get(2)?,
-                    line: row.get::<_, i64>(3)? as usize,
-                    end_line: row.get::<_, i64>(4)? as usize,
-                    content: Some(row.get(5)?),
-                    score: fused,
-                })
-            },
-        );
+        let row = stmt.query_row([block_id], |row| {
+            Ok(SearchResult {
+                file: row.get(0)?,
+                block_type: row.get(1)?,
+                name: row.get(2)?,
+                line: row.get::<_, i64>(3)? as usize + 1,
+                end_line: row.get::<_, i64>(4)? as usize + 1,
+                content: Some(row.get(5)?),
+                score: fused,
+            })
+        });
         results.push(row?);
     }
     Ok(results)
@@ -235,55 +342,34 @@ fn resolve_reference(
     line: Option<usize>,
     name: Option<&str>,
 ) -> Result<Option<(i64, String, String)>> {
-    // By name: exact match within the file.
-    if let Some(name) = name {
-        let row = conn.query_row(
+    let read = |r: &rusqlite::Row<'_>| Ok((r.get(0)?, r.get(1)?, r.get(2)?));
+    let row = if let Some(name) = name {
+        conn.query_row(
             "SELECT id, name, content FROM blocks WHERE file = ?1 AND name = ?2
-             ORDER BY start_line LIMIT 1",
+             ORDER BY start_line, id LIMIT 1",
             rusqlite::params![file, name],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        );
-        if let Ok(hit) = row {
-            return Ok(Some(hit));
-        }
-    }
-
-    // By line: smallest containing block, else first block in the file.
-    if let Some(line) = line {
-        let row = conn.query_row(
+            read,
+        )
+    } else if let Some(line) = line {
+        let Some(zero_based) = line.checked_sub(1).and_then(|n| i64::try_from(n).ok()) else {
+            return Ok(None);
+        };
+        conn.query_row(
             "SELECT id, name, content FROM blocks
              WHERE file = ?1 AND start_line <= ?2 AND end_line >= ?2
-             ORDER BY (end_line - start_line) LIMIT 1",
-            rusqlite::params![file, line as i64],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        );
-        if let Ok(hit) = row {
-            return Ok(Some(hit));
-        }
-    }
-
-    // By file: first block.
-    let row = conn.query_row(
-        "SELECT id, name, content FROM blocks WHERE file = ?1
-         ORDER BY start_line LIMIT 1",
-        rusqlite::params![file],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-    );
-    match row {
-        Ok(hit) => Ok(Some(hit)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
-}
-
-/// Integer row id for a (file, start_line) — used to exclude the reference.
-fn r_row_id(conn: &rusqlite::Connection, file: &str, start_line: usize) -> Option<i64> {
-    conn.query_row(
-        "SELECT id FROM blocks WHERE file = ?1 AND start_line = ?2 LIMIT 1",
-        rusqlite::params![file, start_line as i64],
-        |r| r.get::<_, i64>(0),
-    )
-    .ok()
+             ORDER BY (end_line - start_line), id LIMIT 1",
+            rusqlite::params![file, zero_based],
+            read,
+        )
+    } else {
+        conn.query_row(
+            "SELECT id, name, content FROM blocks WHERE file = ?1
+             ORDER BY start_line, id LIMIT 1",
+            [file],
+            read,
+        )
+    };
+    Ok(row.optional()?)
 }
 
 #[cfg(test)]

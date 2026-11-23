@@ -106,7 +106,11 @@ fn clean_removes_index() {
         .success()
         .stdout(predicate::str::contains("Removed"));
 
-    assert!(!tmp.path().join(".og").exists());
+    let entries = std::fs::read_dir(tmp.path().join(".og"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<Vec<_>>();
+    assert_eq!(entries, ["LOCK"]);
 }
 
 #[test]
@@ -127,6 +131,63 @@ fn build_force_rebuilds() {
     let after = std::fs::read_to_string(tmp.path().join(".og/CURRENT")).unwrap();
     // Same content + model + schema => same generation name republished.
     assert_eq!(before.trim(), after.trim());
+}
+
+#[test]
+fn same_size_subsecond_edit_is_refreshed() {
+    use std::fs::{FileTimes, OpenOptions};
+    use std::io::Write;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_str().unwrap();
+    let path = tmp.path().join("source.rs");
+    let base = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    let replace = |source: &[u8], millis| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .unwrap();
+        file.write_all(source).unwrap();
+        file.set_times(FileTimes::new().set_modified(base + Duration::from_millis(millis)))
+            .unwrap();
+    };
+
+    replace(b"fn alpha_unique() {}\n", 100);
+    og().args(["build", "--deterministic", "-q", root])
+        .assert()
+        .success();
+    replace(b"fn bravo_unique() {}\n", 800);
+    og().args(["status", root])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Status:       stale"));
+    og().args(["-q", "--no-semantic", "-l", "bravo_unique", root])
+        .assert()
+        .success()
+        .stdout("source.rs\n");
+}
+
+#[test]
+fn concurrent_forced_builds_serialize() {
+    let tmp = build_fixture_index();
+    let run = || {
+        std::process::Command::new(assert_cmd::cargo::cargo_bin("og"))
+            .args(["build", "--force", "--deterministic", "-q"])
+            .arg(tmp.path())
+            .spawn()
+            .unwrap()
+    };
+    let mut first = run();
+    let mut second = run();
+    assert!(first.wait().unwrap().success());
+    assert!(second.wait().unwrap().success());
+    og().args(["status", tmp.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Status:       up to date"));
 }
 
 #[test]
@@ -294,6 +355,106 @@ fn similar_search_by_name_uses_raw_score() {
         !stdout.contains("% similar"),
         "similar search must not show '% similar'; got: {stdout}"
     );
+}
+
+#[test]
+fn similar_search_resolves_one_based_lines_and_emits_empty_json() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(
+        tmp.path().join("seed.py"),
+        "def wrong(): return orange\ndef right(): return plum\n",
+    )
+    .unwrap();
+    std::fs::write(tmp.path().join("orange.py"), "def other(): return orange\n").unwrap();
+    std::fs::write(tmp.path().join("plum.py"), "def sibling(): return plum\n").unwrap();
+    let root = tmp.path().to_str().unwrap();
+    og().args(["build", "--deterministic", "-q", root])
+        .assert()
+        .success();
+    og().args(["-q", "--no-semantic", "-l", "-n", "1", "seed.py:2"])
+        .current_dir(tmp.path())
+        .assert()
+        .success()
+        .stdout("plum.py\n");
+
+    for reference in ["seed.py#missing", "seed.py:99", "seed.py:0"] {
+        for format in ["--json", "--no-content"] {
+            og().args(["-q", format, reference])
+                .current_dir(tmp.path())
+                .assert()
+                .code(1)
+                .stdout("[]\n");
+        }
+    }
+}
+
+#[test]
+fn restrictions_apply_before_top_k() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::create_dir(tmp.path().join("distractors")).unwrap();
+    std::fs::create_dir(tmp.path().join("wanted")).unwrap();
+    for i in 0..64 {
+        std::fs::write(
+            tmp.path().join(format!("distractors/{i}.py")),
+            "def target_query(): return 0\n",
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        tmp.path().join("wanted/hit.rs"),
+        "fn eligible() { target_query(); }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("target_query.md"),
+        "# target_query\n\ntarget_query is a detailed example of an identifier.\n",
+    )
+    .unwrap();
+
+    let root = tmp.path().to_str().unwrap();
+    let wanted = tmp.path().join("wanted");
+    let hit = wanted.join("hit.rs");
+    og().args(["build", "--deterministic", "-q", root])
+        .assert()
+        .success();
+    let restrictions: &[(&str, &[&str])] = &[
+        (wanted.to_str().unwrap(), &[]),
+        (hit.to_str().unwrap(), &[]),
+        (root, &["--type", "rs"]),
+        (root, &["--exclude", "distractors/*", "--code-only"]),
+        (root, &["--regex", "eligible"]),
+    ];
+    for &(path, flags) in restrictions {
+        let out = og()
+            .args([
+                "-q",
+                "--no-semantic",
+                "--json",
+                "-n",
+                "1",
+                "target_query",
+                path,
+            ])
+            .args(flags)
+            .assert()
+            .success();
+        let hits: serde_json::Value = serde_json::from_slice(&out.get_output().stdout).unwrap();
+        assert_eq!(hits[0]["file"], "wanted/hit.rs");
+        assert_eq!(hits[0]["line"], 1);
+    }
+    og().args([
+        "-q",
+        "--no-semantic",
+        "-l",
+        "-n",
+        "1",
+        "distractors/0.py#target_query",
+        "wanted",
+    ])
+    .current_dir(tmp.path())
+    .assert()
+    .success()
+    .stdout("wanted/hit.rs\n");
 }
 
 // --- scoping regressions (v0.0.3: starts_with("src/cli") matched src/cli_utils) ---
@@ -719,7 +880,7 @@ fn corrupt_catalog_incremental_build_recovers() {
         .assert()
         .code(0)
         .stderr(predicate::str::contains(
-            "Rebuilding (previous generation unreadable)",
+            "Rebuilding (previous generation unreadable or incompatible)",
         ))
         .stderr(predicate::str::contains("Replacing corrupt generation"));
     og().args(["-q", "-l", "probe_a", tmp.path().to_str().unwrap()])
@@ -760,7 +921,7 @@ fn corrupt_catalog_status_reports_corrupt_not_healthy() {
 }
 
 #[test]
-fn corrupt_catalog_force_build_recovers() {
+fn missing_catalog_is_not_created_by_search_and_force_build_recovers() {
     let tmp = TempDir::new().unwrap();
     std::fs::write(tmp.path().join("t.rs"), "fn probe_c() {}\n").unwrap();
     og().args([
@@ -773,14 +934,24 @@ fn corrupt_catalog_force_build_recovers() {
     .success();
     let og_dir = tmp.path().join(".og");
     let cur = std::fs::read_to_string(og_dir.join("CURRENT")).unwrap();
-    std::fs::write(
-        og_dir
-            .join("generations")
-            .join(cur.trim())
-            .join("catalog.sqlite"),
-        b"garbage bytes, not sqlite",
-    )
-    .unwrap();
+    let catalog = og_dir
+        .join("generations")
+        .join(cur.trim())
+        .join("catalog.sqlite");
+    std::fs::remove_file(&catalog).unwrap();
+
+    og().args([
+        "-q",
+        "--no-semantic",
+        "probe_c",
+        tmp.path().to_str().unwrap(),
+    ])
+    .assert()
+    .code(2);
+    assert!(
+        !catalog.exists(),
+        "a reader must not create a replacement file"
+    );
 
     og().args([
         "build",

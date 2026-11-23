@@ -1,14 +1,15 @@
 //! Index lifecycle: build a generation, publish atomically via CURRENT,
 //! open the published generation, locate index roots by walking up.
 //!
-//! Layout (ai/design/rust-rewrite-2026-09.md):
+//! Layout:
 //! ```text
 //! .og/
+//! ├── LOCK                     # stable writer lock, retained by clean
 //! ├── CURRENT                  # pointer file: generation dir name
 //! └── generations/
 //!     └── g-<hash>/
 //!         ├── catalog.sqlite  # files, blocks, block_fts, block_trigram
-//!         ├── vectors-000.bin  # f32 rows in blocks.id order
+//!         ├── vectors-000.bin  # fp16 rows in blocks.id order
 //!         └── manifest.json
 //! ```
 
@@ -36,23 +37,92 @@ pub struct Index {
 impl Index {
     pub fn open(index_root: &Path) -> Result<Self> {
         let og_dir = index_root.join(INDEX_DIR);
-        let current = std::fs::read_to_string(og_dir.join("CURRENT"))
-            .context("no index found — run 'og build' first")?;
-        let gen_name = current.trim();
-        let gen_dir = og_dir.join("generations").join(gen_name);
+        let pointer = og_dir.join("CURRENT");
+        let open_current = |current: &str| {
+            let name = current.trim();
+            anyhow::ensure!(
+                valid_generation_name(name),
+                "invalid CURRENT generation name"
+            );
+            Self::open_generation(&og_dir.join("generations").join(name))
+                .with_context(|| format!("opening generation {name}"))
+        };
+        let current =
+            std::fs::read_to_string(&pointer).context("no index found — run 'og build' first")?;
+        // GC can remove a generation between reading CURRENT and opening
+        // both components. Retry if a writer moved the pointer meanwhile.
+        let result = open_current(&current);
+        if result.is_err()
+            && let Ok(next) = std::fs::read_to_string(&pointer)
+            && next != current
+        {
+            return open_current(&next);
+        }
+        result
+    }
 
-        let manifest = Manifest::read(&gen_dir.join("manifest.json"))?;
-        let conn = catalog::open_readonly(&gen_dir.join("catalog.sqlite"))
-            .with_context(|| format!("opening generation {gen_name}"))?;
-        let vectors = VectorStore::open(&gen_dir.join("vectors-000.bin"), manifest.dims)
-            .with_context(|| format!("opening vectors for generation {gen_name}"))?;
-
+    fn open_generation(dir: &Path) -> Result<Self> {
+        let manifest = Manifest::read(&dir.join("manifest.json"))?;
+        anyhow::ensure!(
+            manifest.schema_version == catalog::SCHEMA_VERSION,
+            "index schema {} unsupported — run 'og build' to rebuild",
+            manifest.schema_version
+        );
+        let conn = catalog::open_readonly(&dir.join("catalog.sqlite"))?;
+        let vectors = VectorStore::open(&dir.join("vectors-000.bin"), manifest.dims)?;
+        let last_id: i64 =
+            conn.query_row("SELECT coalesce(max(id), 0) FROM blocks", [], |r| r.get(0))?;
+        anyhow::ensure!(
+            vectors.len() as i64 >= last_id,
+            "vector store is missing rows"
+        );
         Ok(Self {
             manifest,
             conn,
             vectors,
         })
     }
+}
+
+fn valid_generation_name(name: &str) -> bool {
+    name.starts_with("g-") && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
+fn lock_writer(og_dir: &Path) -> Result<std::fs::File> {
+    std::fs::create_dir_all(og_dir)?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(og_dir.join("LOCK"))?;
+    file.lock().context("locking index for writing")?;
+    Ok(file)
+}
+
+/// Remove index data while serializing with builds. Keep the lock inode so
+/// concurrent writers can never lock different files for the same index.
+pub fn clean(root: &Path) -> Result<()> {
+    let og_dir = root.join(INDEX_DIR);
+    let _lock = lock_writer(&og_dir)?;
+    // Unpublish first so new readers don't try to open the files we remove.
+    match std::fs::remove_file(og_dir.join("CURRENT")) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    for entry in std::fs::read_dir(&og_dir)? {
+        let entry = entry?;
+        if entry.file_name() == "LOCK" {
+            continue;
+        }
+        if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(entry.path())?;
+        } else {
+            std::fs::remove_file(entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 /// Find the nearest enclosing index root: walk up from `start` looking for
@@ -103,47 +173,53 @@ pub fn build_with(
     let root = root
         .canonicalize()
         .with_context(|| format!("index root {} does not exist", root.display()))?;
-    let og_dir = root.join(INDEX_DIR);
-    std::fs::create_dir_all(og_dir.join("generations"))?;
+    anyhow::ensure!(root.is_dir(), "index root must be a directory");
+    let _lock = lock_writer(&root.join(INDEX_DIR))?;
+    build_locked(&root, embedder, quiet, mode)
+}
 
-    let staging = og_dir.join("generations").join(".staging");
+fn build_locked(
+    root: &Path,
+    embedder: &dyn Embedder,
+    quiet: bool,
+    mode: Incremental,
+) -> Result<IndexStats> {
+    let og_dir = root.join(INDEX_DIR);
+    let generations = og_dir.join("generations");
+    std::fs::create_dir_all(&generations)?;
+
+    let staging = generations.join(".staging");
     if staging.exists() {
         std::fs::remove_dir_all(&staging)?;
     }
 
     // Resolve previous generation; decide full vs incremental.
     let prev = current_generation(&og_dir);
-    let prev_manifest = prev.as_ref().map(|g| {
-        let p = og_dir.join("generations").join(g).join("manifest.json");
-        Manifest::read(&p)
-    });
-
-    let prev_readable = prev
+    let prev_dir = prev.as_ref().map(|g| generations.join(g));
+    let prev_manifest = prev_dir
         .as_ref()
-        .is_some_and(|g| generation_readable(&og_dir.join("generations").join(g)));
-    let use_incremental = mode == Incremental::Auto
-        && matches!(
-            prev_manifest.as_ref(),
-            Some(Ok(m)) if m.model_id == embedder.id()
-                && m.schema_version == catalog::SCHEMA_VERSION
-                && m.version == MANIFEST_VERSION
-        )
-        && prev_readable;
-
-    let (new_staging, stats, content_hash, dims) = if use_incremental {
-        let prev_gen = prev.clone().expect("checked above");
-        let prev_dir = og_dir.join("generations").join(&prev_gen);
-        incremental_build(&root, &og_dir, &prev_dir, embedder, &staging, quiet)?
+        .and_then(|dir| Index::open_generation(dir).ok())
+        .map(|idx| idx.manifest);
+    let compatible = prev_manifest
+        .as_ref()
+        .is_some_and(|m| m.model_id == embedder.id() && m.dims == embedder.dims());
+    let (new_staging, stats, content_hash, dims) = if mode == Incremental::Auto
+        && compatible
+        && let Some(prev_dir) = &prev_dir
+    {
+        incremental_build(root, prev_dir, embedder, &staging, quiet)?
     } else {
         if !quiet && prev.is_some() {
-            let why = if !prev_readable {
-                "previous generation unreadable"
+            let why = if mode == Incremental::Force {
+                "forced"
+            } else if prev_manifest.is_none() {
+                "previous generation unreadable or incompatible"
             } else {
-                "model or schema changed"
+                "model changed"
             };
             eprintln!("Rebuilding ({why})");
         }
-        full_build(&root, &og_dir, embedder, &staging, quiet)?
+        full_build(root, embedder, &staging, quiet)?
     };
     // Incremental no-op returns None: the current generation already
     // matches the tree; skip manifest write, publish, and gc entirely.
@@ -171,35 +247,33 @@ pub fn build_with(
     // generation is complete and immutable the moment CURRENT flips.
     manifest.write(&staging.join("manifest.json"))?;
 
-    // Generation name derives from content + model identity + storage
-
-    // Generation name derives from content + model identity + storage
-    // schema: any of the three changing must publish a new directory, or a
-    // schema bump would discard the fresh build (same name as the existing
-    // generation) and leave the old row format behind for a new reader.
+    // Reuse identical readable snapshots. Repair under a different
+    // directory name rather than removing a directory CURRENT may name.
     let name_input = format!(
-        "{}\x1f{}\x1f{}",
-        manifest.content_hash, manifest.model_id, manifest.schema_version
+        "{}\x1f{}\x1f{}\x1f{}",
+        manifest.content_hash, manifest.model_id, manifest.schema_version, manifest.dims
     );
     let gen_hex = blake3::hash(name_input.as_bytes()).to_hex().to_string();
-    let gen_name = format!("g-{}", &gen_hex[..12]);
-    let final_dir = og_dir.join("generations").join(&gen_name);
-    if final_dir != staging {
-        // A readable existing generation with this name means identical
-        // content+model+schema already published: keep it, drop staging.
-        // An UNREADABLE one is corrupt (e.g. half-written): replace it,
-        // never re-point CURRENT at garbage.
-        if final_dir.exists() && generation_readable(&final_dir) {
-            std::fs::remove_dir_all(&staging)?;
-        } else {
-            if final_dir.exists() {
-                if !quiet {
-                    eprintln!("Replacing corrupt generation {gen_name}");
-                }
-                std::fs::remove_dir_all(&final_dir)?;
-            }
+    let base_name = format!("g-{}", &gen_hex[..12]);
+    let mut gen_name = base_name.clone();
+    for suffix in 1.. {
+        let final_dir = generations.join(&gen_name);
+        if !final_dir.exists() {
             std::fs::rename(&staging, &final_dir)?;
+            break;
         }
+        if let Ok(idx) = Index::open_generation(&final_dir)
+            && idx.manifest.content_hash == manifest.content_hash
+            && idx.manifest.model_id == manifest.model_id
+            && idx.manifest.dims == manifest.dims
+        {
+            std::fs::remove_dir_all(&staging)?;
+            break;
+        }
+        if !quiet {
+            eprintln!("Replacing corrupt generation or hash collision: {gen_name}");
+        }
+        gen_name = format!("{base_name}-{suffix}");
     }
 
     // Publish: temp-write CURRENT + atomic rename.
@@ -215,10 +289,14 @@ pub fn build_with(
     Ok(stats)
 }
 
-/// True when on-disk files differ from the catalog (metadata-only check:
-/// no content reads, no model load).
+/// Check file metadata for changes without loading the model. Only
+/// uncatalogued paths need a content read to distinguish text from binaries.
 pub fn needs_update(index_root: &Path) -> Result<bool> {
     let idx = Index::open(index_root)?;
+    needs_update_at(index_root, &idx)
+}
+
+fn needs_update_at(index_root: &Path, idx: &Index) -> Result<bool> {
     let catalog_fp = catalog::file_fingerprints(&idx.conn)?;
 
     let on_disk = crate::scan::scan_metadata(index_root)?;
@@ -231,6 +309,9 @@ pub fn needs_update(index_root: &Path) -> Result<bool> {
         let rel = rel.to_string_lossy().into_owned();
         match catalog_fp.get(&rel) {
             Some(&(s, m)) if s == *size as i64 && m == *mtime as i64 => {}
+            // The metadata walk cannot identify extensionless binaries
+            // and invalid UTF-8. Confirm uncatalogued files are indexable.
+            None if scan::read_text(abs, *mtime).is_none() => continue,
             _ => return Ok(true), // new or changed
         }
         disk_rel.insert(rel);
@@ -245,16 +326,22 @@ pub fn needs_update(index_root: &Path) -> Result<bool> {
 
 /// Auto-update before search (v0.0.3 behavior): if the catalog is stale,
 /// run an incremental build in the index's pinned model space. Returns
-/// whether a rebuild happened. Callers treat errors as non-fatal: a stale
-/// index still answers queries via BM25.
+/// whether a rebuild happened. Propagate errors rather than silently
+/// answering from an index we could not refresh.
 pub fn update_if_stale(index_root: &Path, quiet: bool) -> Result<bool> {
     if !needs_update(index_root)? {
         return Ok(false);
     }
+    let _lock = lock_writer(&index_root.join(INDEX_DIR))?;
+    // Recheck under the writer lock, including the model identity: a build
+    // may have made the index current or selected another model.
     let idx = Index::open(index_root)?;
+    if !needs_update_at(index_root, &idx)? {
+        return Ok(false);
+    }
     let embedder = crate::model::embedder_for(&idx.manifest.model_id)?;
     drop(idx);
-    build_with(index_root, embedder.as_ref(), quiet, Incremental::Auto)?;
+    build_locked(index_root, embedder.as_ref(), quiet, Incremental::Auto)?;
     Ok(true)
 }
 
@@ -263,12 +350,11 @@ fn current_generation(og_dir: &Path) -> Option<String> {
     std::fs::read_to_string(og_dir.join("CURRENT"))
         .ok()
         .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+        .filter(|s| valid_generation_name(s))
 }
 
 fn full_build(
     root: &Path,
-    _og_dir: &Path,
     embedder: &dyn Embedder,
     staging: &Path,
     quiet: bool,
@@ -292,10 +378,13 @@ fn full_build(
     }
 
     let t0 = std::time::Instant::now();
-    let file_vec: Vec<(PathBuf, String, u64)> = files
+    let mut file_vec: Vec<_> = files
         .into_iter()
         .map(|(path, (content, mtime))| (path, content, mtime))
         .collect();
+    // Rowids break score ties, so hash-map iteration must not determine
+    // the ordering of a fresh build.
+    file_vec.sort_unstable_by(|a, b| a.0.cmp(&b.0));
     let results = extract_all(root, file_vec);
 
     let conn = catalog::open(&staging.join("catalog.sqlite"))?;
@@ -308,6 +397,7 @@ fn full_build(
 
     let stats = stats_from_conn(&conn)?;
     let content_hash = compute_content_hash(&conn)?;
+    conn.pragma_update(None, "journal_mode", "DELETE")?;
     if !quiet {
         eprintln!(
             "Indexed {} blocks from {} files ({:.1}s)",
@@ -327,7 +417,6 @@ fn full_build(
 
 fn incremental_build(
     root: &Path,
-    _og_dir: &Path,
     prev_dir: &Path,
     embedder: &dyn Embedder,
     staging: &Path,
@@ -396,13 +485,17 @@ fn incremental_build(
     // Real changes: copy the previous generation as the staging base
     // (immutable source), then edit the copy.
     drop(prev_conn);
-    copy_dir(prev_dir, staging)?;
+    std::fs::create_dir(staging)?;
+    for name in ["catalog.sqlite", "vectors-000.bin"] {
+        std::fs::copy(prev_dir.join(name), staging.join(name))?;
+    }
 
     // Deletions: remove catalog rows + zero vector rows.
     let conn = catalog::open(&staging.join("catalog.sqlite"))?;
     let mut vec_writer =
         VectorWriter::open_existing(&staging.join("vectors-000.bin"), embedder.dims())?;
     let mut deleted_rowids: Vec<i64> = Vec::new();
+    deleted.sort_unstable();
     for rel in &deleted {
         deleted_rowids.extend(catalog::delete_file(&conn, rel)?);
     }
@@ -413,6 +506,7 @@ fn incremental_build(
     // Changed files: embed_and_store handles per-file delete + re-insert
     // (zeroing old vector rows, appending new ones at fresh rowids).
     if !changed.is_empty() {
+        changed.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         let results = extract_all(root, changed);
         embed_and_store(&conn, &mut vec_writer, results, embedder)?;
     }
@@ -420,6 +514,7 @@ fn incremental_build(
     vec_writer.finish()?;
     let stats = stats_from_conn(&conn)?;
     let content_hash = compute_content_hash(&conn)?;
+    conn.pragma_update(None, "journal_mode", "DELETE")?;
     if !quiet && stats.skipped > 0 {
         eprintln!(
             "  {} files yielded no blocks (below chunk minimum, or no constructs)",
@@ -452,8 +547,7 @@ fn extract_all(root: &Path, files: Vec<(PathBuf, String, u64)>) -> Vec<Extracted
 }
 
 /// Embed extraction results and store file + blocks + vector rows.
-/// Row order: rows are appended as blocks are inserted, so vector row i
-/// tracks blocks.rowid i (SQLite guarantees monotonic rowids on insert).
+/// Vector rows are written at the IDs returned by SQLite.
 fn embed_and_store(
     conn: &rusqlite::Connection,
     vec_writer: &mut VectorWriter,
@@ -477,6 +571,10 @@ fn embed_and_store(
                 // (it may reuse a freed max rowid); vectors are written at
                 // exactly those positions.
                 let rowids = catalog::insert_file(conn, &rel, size, mtime, &hash, &blocks)?;
+                anyhow::ensure!(
+                    rowids.len() == embeddings.len(),
+                    "wrong embedding count for {rel}"
+                );
                 for (rowid, v) in rowids.iter().zip(&embeddings) {
                     vec_writer.write_at(*rowid, v)?;
                 }
@@ -488,9 +586,7 @@ fn embed_and_store(
                 stats.files += 1;
                 stats.blocks += blocks.len();
             }
-            Err(_e) => {
-                stats.errors += 1;
-            }
+            Err(e) => return Err(e),
         }
     }
     Ok(stats)
@@ -513,26 +609,6 @@ fn rel_path(root: &Path, path: &Path) -> Result<String> {
         .into_owned())
 }
 
-/// Copy a directory tree (previous generation -> staging).
-fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
-    std::fs::create_dir_all(dst)?;
-    copy_dir_inner(src, dst)
-}
-
-fn copy_dir_inner(src: &Path, dst: &Path) -> Result<()> {
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let target = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            std::fs::create_dir_all(&target)?;
-            copy_dir_inner(&entry.path(), &target)?;
-        } else {
-            std::fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
-}
-
 fn compute_content_hash(conn: &rusqlite::Connection) -> Result<String> {
     let mut hasher = blake3::Hasher::new();
     let mut stmt = conn.prepare("SELECT path, size, mtime, hash FROM files ORDER BY path")?;
@@ -547,19 +623,6 @@ fn compute_content_hash(conn: &rusqlite::Connection) -> Result<String> {
     Ok(hasher.finalize().to_hex().to_string())
 }
 
-/// True when the generation's catalog and sidecar actually open. Manifest
-/// presence is not enough: a corrupt catalog passes a manifest-only check
-/// and every reader then fails with a raw SQLite error.
-fn generation_readable(gen_dir: &Path) -> bool {
-    let m = Manifest::read(&gen_dir.join("manifest.json"));
-    let m = match m {
-        Ok(m) => m,
-        Err(_) => return false,
-    };
-    catalog::open_readonly(&gen_dir.join("catalog.sqlite")).is_ok()
-        && VectorStore::open(&gen_dir.join("vectors-000.bin"), m.dims).is_ok()
-}
-
 fn gc_generations(og_dir: &Path, keep: usize) -> Result<()> {
     let current = std::fs::read_to_string(og_dir.join("CURRENT"))?;
     let current = current.trim();
@@ -570,7 +633,7 @@ fn gc_generations(og_dir: &Path, keep: usize) -> Result<()> {
         .collect();
     // Keep CURRENT first, then most recent by modified time.
     gens.retain(|p| p.file_name().map(|n| n != current).unwrap_or(true));
-    gens.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+    gens.sort_by_key(|p| std::cmp::Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok()));
     while gens.len() > keep.saturating_sub(1) {
         let victim = gens.pop();
         match victim {
@@ -581,10 +644,4 @@ fn gc_generations(og_dir: &Path, keep: usize) -> Result<()> {
         }
     }
     Ok(())
-}
-
-/// Hash helper used by the CLI status command.
-pub fn generation_name(index: &Index) -> &str {
-    // Manifest doesn't carry the dir name; derive from CURRENT for display.
-    Box::leak(Box::new(index.manifest.content_hash[..12].to_string()))
 }

@@ -1,10 +1,6 @@
 # Changelog
 
-## [0.0.4] - 2026-09-04
-
-Released on the 0.0.x line by intent: early development, bugs fixed as
-they surface; 0.1.0 is reserved for the first stability milestone rather
-than spent on the rewrite itself.
+## [0.0.4] - Unreleased
 
 Complete Rust rewrite on owned storage (no OmenDB, no ONNX runtime). The
 index format changed: delete old `.og` directories or run `og build`,
@@ -47,13 +43,24 @@ them. Old `.og` indexes are not readable by 0.0.4 and vice versa.
 
 ### Fixed
 
+- Search scope and filters apply before the result limit in both text and
+  file-reference searches. Exclusions are globs, not substring matches.
+- Search output and `file:line` references use 1-based lines. Missing
+  names and out-of-range lines no longer resolve to an unrelated block.
+  Empty similar-code results emit `[]` in JSON modes.
+- File timestamps retain subsecond precision. Run `og build` to upgrade
+  an index written by an earlier development build. Search reports
+  refresh errors rather than silently returning older results.
+- Concurrent builds and cleans serialize per index. Readers never create
+  a missing catalog; rebuilds publish repaired data under a new name
+  before replacing the current pointer.
 - Lexical search OR-matches and BM25-ranks instead of AND-filtering to
   empty on partial term matches.
 - Generation names mix content + model + schema, so upgrades publish a
   new directory instead of stranding an old row format behind a new
   reader.
-- Cached models resolve without network revalidation (was ~2.4s per
-  invocation).
+- The default model uses a fixed Hub revision and reuses a cached copy
+  of that revision without network revalidation.
 - `og build <nonexistent-path>` no longer silently creates the directory
   plus an index inside it; missing/file roots are hard errors.
 - Corrupt-catalog recovery: incremental build falls back to a full

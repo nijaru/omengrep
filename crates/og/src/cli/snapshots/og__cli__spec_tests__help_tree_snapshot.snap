@@ -19,8 +19,8 @@ Commands:
 
 Arguments:
   [QUERY]  Search query or file reference (file#name, file:line)
-  [PATH]   Directory to search
-           (default: .)
+  [PATH]   Directory to search (default: current directory, or the reference's
+           index)
 
 Flags:
   -n <NUM_RESULTS>         Number of results

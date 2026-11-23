@@ -24,9 +24,8 @@ struct Og {
     /// Search query or file reference (file#name, file:line)
     query: Option<String>,
 
-    /// Directory to search
-    #[usage(default = ".")]
-    path: PathBuf,
+    /// Directory to search (default: current directory, or the reference's index)
+    path: Option<PathBuf>,
 
     /// Number of results
     #[usage(short = 'n', default = "10")]
@@ -260,7 +259,7 @@ pub fn run() -> anyhow::Result<()> {
         None => match cli.query {
             Some(query) => search::run(&search::SearchParams {
                 query: Some(query.as_str()),
-                path: &cli.path,
+                path: cli.path.as_deref(),
                 num_results: cli.num_results,
                 format: og_core::types::OutputFormat::from_flags(
                     cli.json,

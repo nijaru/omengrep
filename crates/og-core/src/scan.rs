@@ -135,7 +135,7 @@ const SENSITIVE_PATTERNS: &[&str] = &[
     ".sql.bz2",
 ];
 
-/// Metadata for a scanned file: (file_size, mtime_secs).
+/// Metadata for a scanned file: (file_size, mtime_ns).
 pub type FileMetadata = (u64, u64);
 
 /// Check if a file path should be skipped during scanning.
@@ -186,7 +186,7 @@ fn build_walker(root: &Path) -> ignore::Walk {
 }
 
 /// Scan directory tree for file metadata only (no content reads).
-/// Returns path -> (file_size, mtime_secs) for each eligible file.
+/// Returns path -> (file_size, mtime_ns) for each eligible path.
 pub fn scan_metadata(root: &Path) -> Result<HashMap<PathBuf, FileMetadata>> {
     let mut results = HashMap::new();
 
@@ -207,12 +207,7 @@ pub fn scan_metadata(root: &Path) -> Result<HashMap<PathBuf, FileMetadata>> {
 
         if let Ok(meta) = std::fs::metadata(path) {
             let size = meta.len();
-            let mtime = meta
-                .modified()
-                .unwrap_or(SystemTime::UNIX_EPOCH)
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+            let mtime = metadata_mtime(&meta);
             results.insert(path.to_path_buf(), (size, mtime));
         }
     }
@@ -223,10 +218,15 @@ pub fn scan_metadata(root: &Path) -> Result<HashMap<PathBuf, FileMetadata>> {
 /// Get mtime for a single file path.
 pub fn file_mtime(path: &Path) -> u64 {
     std::fs::metadata(path)
-        .and_then(|m| m.modified())
+        .map(|m| metadata_mtime(&m))
+        .unwrap_or(0)
+}
+
+fn metadata_mtime(meta: &std::fs::Metadata) -> u64 {
+    meta.modified()
         .unwrap_or(SystemTime::UNIX_EPOCH)
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_secs())
+        .map(|d| d.as_nanos().min(i64::MAX as u128) as u64)
         .unwrap_or(0)
 }
 
